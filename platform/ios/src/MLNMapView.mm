@@ -79,6 +79,7 @@
 #import "MLNSettings_Private.h"
 #import "MLNStyleLayerManager.h"
 #import "MLNStyleLayer_Private.h"
+#import "MLNStyleValue_Private.h"
 #import "MLNStyle_Private.h"
 #import "MLNUserLocationAnnotationView.h"
 #import "MLNUserLocationAnnotationView_Private.h"
@@ -7641,19 +7642,12 @@ static void *windowScreenContext = &windowScreenContext;
 
     // Set the update properties function
     pluginLayerImpl->setUpdatePropertiesFunction(
-        [weakPlugInLayer](const std::string &jsonProperties) {
+        [weakPlugInLayer](const mbgl::Value &propertiesValue) {
           // Use autorelease pools in lambdas
           @autoreleasepool {
-            // Just wrap the string with NSData so it can be run through properties
-            NSData *d = [NSData dataWithBytesNoCopy:(void *)jsonProperties.data()
-                                             length:jsonProperties.length()
-                                       freeWhenDone:NO];
-            NSError *error = nil;
-            NSDictionary *properties = [NSJSONSerialization JSONObjectWithData:d
-                                                                       options:0
-                                                                         error:&error];
-            if (error) {
-              // TODO: What should we do here?
+            id properties = MLNJSONObjectFromMBGLValue(propertiesValue);
+            if (![properties isKindOfClass:[NSDictionary class]]) {
+              properties = @{};
             }
             [weakPlugInLayer onUpdateLayerProperties:properties];
           }

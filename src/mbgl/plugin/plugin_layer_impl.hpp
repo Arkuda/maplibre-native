@@ -13,6 +13,7 @@
 #include <mbgl/style/property_value.hpp>
 #include <mbgl/style/conversion/property_value.hpp>
 #include <mbgl/util/color.hpp>
+#include <mbgl/util/variant.hpp>
 
 #include <map>
 #include <vector>
@@ -61,8 +62,8 @@ public:
     PropertyValue<mbgl::Color> _dataDrivenColorProperty;
     void setCurrentColorValue(mbgl::Color value);
 
-    // Return this property as json
-    std::string asJSON();
+    // Return this property as a native value.
+    Value asValue();
 
 private:
 };
@@ -72,7 +73,7 @@ public:
     PluginLayerProperty* getProperty(const std::string& propertyName);
     void addProperty(PluginLayerProperty* property);
 
-    std::string propertiesAsJSON();
+    Value propertiesAsValue();
 
     std::vector<PluginLayerProperty*> getProperties();
 
@@ -82,7 +83,7 @@ private:
 
 class PluginLayer::Impl : public Layer::Impl {
 public:
-    Impl(std::string layerID, std::string sourceID, LayerTypeInfo layerTypeInfo, const std::string& layerProperties);
+    Impl(std::string layerID, std::string sourceID, LayerTypeInfo layerTypeInfo, const Value& layerProperties);
 
     using Layer::Impl::Impl;
 
@@ -110,12 +111,12 @@ public:
     // have this method called on a background thread/etc or use another way to parallalize work
     OnUpdateLayer _updateFunction;
 
-    //! Optional: Called when the layer properties change.  The properties are passed as JSON for now
+    //! Optional: Called when the layer properties change.
     OnUpdateLayerProperties _updateLayerPropertiesFunction;
 
 private:
     LayerTypeInfo _layerTypeInfo;
-    std::string _layerProperties;
+    Value _layerProperties;
 };
 
 } // namespace style

@@ -1,6 +1,7 @@
 #include <mbgl/plugin/plugin_layer_impl.hpp>
 
 #include <iostream>
+#include <unordered_map>
 
 namespace mbgl {
 namespace style {
@@ -8,7 +9,7 @@ namespace style {
 PluginLayer::Impl::Impl(std::string layerID,
                         std::string sourceID,
                         LayerTypeInfo layerTypeInfo,
-                        const std::string& layerProperties)
+                        const Value& layerProperties)
     : Layer::Impl(layerID, sourceID),
       _layerTypeInfo(layerTypeInfo),
       _layerProperties(layerProperties) {}
@@ -17,18 +18,15 @@ bool PluginLayer::Impl::hasLayoutDifference([[maybe_unused]] const Layer::Impl& 
     return false;
 }
 
-// Return this property as json
-std::string PluginLayerProperty::asJSON() {
-    std::string tempResult;
-
+Value PluginLayerProperty::asValue() {
     if (_propertyType == PropertyType::SingleFloat) {
-        tempResult = "\"" + _propertyName + "\":" + std::to_string(_singleFloatValue);
+        return _singleFloatValue;
     } else if (_propertyType == PropertyType::Color) {
-        // In RGBA format
-        tempResult = "\"" + _propertyName + "\":\"" + _dataDrivenColorValue.stringify() + "\"";
+        // Keep color encoding in RGBA string format for compatibility.
+        return _dataDrivenColorValue.stringify();
     }
 
-    return tempResult;
+    return NullValue{};
 }
 
 void PluginLayerProperty::setPropertyValue([[maybe_unused]] const conversion::Convertible& value) {}
@@ -56,20 +54,13 @@ void PluginLayerPropertyManager::addProperty(PluginLayerProperty* property) {
     _properties[property->_propertyName] = property;
 }
 
-std::string PluginLayerPropertyManager::propertiesAsJSON() {
-    std::string tempResult = "{";
-
-    bool firstItem = true;
-    for (auto d : _properties) {
-        if (!firstItem) {
-            tempResult.append(", ");
-        }
-        firstItem = false;
-        tempResult.append(d.second->asJSON());
+Value PluginLayerPropertyManager::propertiesAsValue() {
+    std::unordered_map<std::string, Value> result;
+    result.reserve(_properties.size());
+    for (const auto& [name, property] : _properties) {
+        result.emplace(name, property->asValue());
     }
-    tempResult.append("}");
-
-    return tempResult;
+    return result;
 }
 
 std::vector<PluginLayerProperty*> PluginLayerPropertyManager::getProperties() {

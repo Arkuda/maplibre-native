@@ -79,67 +79,15 @@ const style::LayerTypeInfo* PluginLayerFactory::getTypeInfo() const noexcept {
     return &_layerTypeInfo;
 }
 
-void jsonStringFromConvertible(const style::conversion::Convertible& value, std::string& output) {
-    if (isObject(value)) {
-        output.append("{");
-        bool firstItem = true;
-        eachMember(value,
-                   [&output, &firstItem](const std::string& name, const style::conversion::Convertible& paramValue)
-                       -> std::optional<style::conversion::Error> {
-                       if (!firstItem) {
-                           output.append(",");
-                       }
-                       firstItem = false;
-                       output.append("\"");
-                       output.append(name);
-                       output.append("\":");
-
-                       jsonStringFromConvertible(paramValue, output);
-
-                       return std::nullopt;
-                   });
-        output.append("}");
-    } else if (isArray(value)) {
-        output.append("[");
-        bool firstItem = true;
-
-        for (size_t i = 0; i < arrayLength(value); i++) {
-            if (!firstItem) {
-                output.append(",");
-            }
-            firstItem = false;
-
-            auto itemValue = arrayMember(value, i);
-            jsonStringFromConvertible(itemValue, output);
-        }
-
-        output.append("]");
-    } else {
-        auto v = toValue(value);
-        if (auto iVal = v.value().getInt()) {
-            std::string tempResult = std::to_string(*iVal);
-            output.append(tempResult);
-        } else if (auto uIVal = v.value().getUint()) {
-            std::string tempResult = std::to_string(*uIVal);
-            output.append(tempResult);
-
-        } else if (auto s = v.value().getString()) {
-            output.append("\"");
-            output.append(*s);
-            output.append("\"");
-
-        } else if (auto d = v.value().getDouble()) {
-            output.append(std::to_string(*d));
-        }
-    }
-}
-
 std::unique_ptr<style::Layer> PluginLayerFactory::createLayer(const std::string& id,
                                                               const style::conversion::Convertible& value) noexcept {
-    std::string layerProperties;
+    Value layerProperties = NullValue{};
 
     if (auto memberValue = objectMember(value, "properties")) {
-        jsonStringFromConvertible(*memberValue, layerProperties);
+        auto maybeLayerProperties = toValue(*memberValue);
+        if (maybeLayerProperties) {
+            layerProperties = maybeLayerProperties.value();
+        }
         if (isObject(*memberValue)) {
             eachMember(*memberValue,
                        []([[maybe_unused]] const std::string& name,
@@ -151,9 +99,7 @@ std::unique_ptr<style::Layer> PluginLayerFactory::createLayer(const std::string&
     std::string source = "source";
 
     auto tempResult = std::unique_ptr<style::Layer>(new (std::nothrow)
-                                                        style::PluginLayer(id, source, _layerTypeInfo, layerProperties
-                                                                           //,*customProperties
-                                                                           ));
+                                                        style::PluginLayer(id, source, _layerTypeInfo, layerProperties));
 
     if (_onLayerCreated != nullptr) {
         auto layerRaw = tempResult.get();

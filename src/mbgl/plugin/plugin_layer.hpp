@@ -3,6 +3,7 @@
 #include <mbgl/style/layer.hpp>
 #include <mbgl/renderer/paint_parameters.hpp>
 #include <mbgl/renderer/render_layer.hpp>
+#include <mbgl/util/variant.hpp>
 
 namespace mbgl {
 
@@ -13,7 +14,7 @@ public:
     PluginLayer(const std::string& layerID,
                 const std::string& sourceID,
                 const style::LayerTypeInfo layerTypeInfo,
-                const std::string& layerProperties);
+                const Value& layerProperties);
     ~PluginLayer() override;
 
     // Private implementation
@@ -27,7 +28,7 @@ public:
 public:
     using OnRenderLayer = std::function<void(PaintParameters&)>;
     using OnUpdateLayer = std::function<void(const LayerPrepareParameters&)>;
-    using OnUpdateLayerProperties = std::function<void(const std::string& properties)>;
+    using OnUpdateLayerProperties = std::function<void(const Value& properties)>;
 
     void* _platformReference = nullptr;
 
