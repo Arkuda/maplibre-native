@@ -9,10 +9,7 @@ namespace style {
 PluginLayer::PluginLayer(const std::string& layerID,
                          const std::string& sourceID,
                          const style::LayerTypeInfo layerTypeInfo,
-                         const std::string& layerProperties
-
-                         //,const style::conversion::Convertible& layerProperties
-                         )
+                         const Value& layerProperties)
     : Layer(makeMutable<Impl>(layerID, sourceID, layerTypeInfo, layerProperties)) {}
 
 PluginLayer::PluginLayer(Immutable<Impl> impl_)

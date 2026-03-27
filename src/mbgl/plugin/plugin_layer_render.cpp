@@ -157,9 +157,8 @@ void RenderPluginLayer::evaluate(const PropertyEvaluationParameters& parameters)
         }
     }
 
-    std::string jsonProperties = pm.propertiesAsJSON();
-
-    i->_updateLayerPropertiesFunction(jsonProperties);
+    Value nativeProperties = pm.propertiesAsValue();
+    i->_updateLayerPropertiesFunction(nativeProperties);
 }
 
 bool RenderPluginLayer::hasTransition() const {

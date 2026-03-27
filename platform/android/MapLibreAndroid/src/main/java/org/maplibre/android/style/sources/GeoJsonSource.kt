@@ -6,6 +6,7 @@ import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.Geometry
 import org.maplibre.android.style.expressions.Expression
+import com.google.gson.JsonParser
 import java.net.URI
 import java.net.URL
 import java.util.*
@@ -292,7 +293,19 @@ class GeoJsonSource : Source {
             return
         }
         checkThread()
-        nativeSetGeoJsonString(json)
+        runCatching {
+            val type = JsonParser.parseString(json)
+                .asJsonObject
+                .get("type")
+                .asString
+            when (type) {
+                "FeatureCollection" -> nativeSetFeatureCollection(FeatureCollection.fromJson(json))
+                "Feature" -> nativeSetFeature(Feature.fromJson(json))
+                else -> nativeSetGeoJsonString(json)
+            }
+        }.getOrElse {
+            nativeSetGeoJsonString(json)
+        }
     }
 
     /**
