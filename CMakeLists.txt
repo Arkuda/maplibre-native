@@ -3,9 +3,6 @@ cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
 option(MLN_WITH_CORE_ONLY "Build only the core bits, no platform code" OFF)
 option(MLN_WITH_CLANG_TIDY "Build with clang-tidy checks enabled" OFF)
 option(MLN_WITH_COVERAGE "Enable code coverage collection" OFF)
-option(MLN_WITH_QT "Build MapLibre Native Qt bindings" OFF)
-option(MLN_WITH_NODE "Build MapLibre Native Node.js bindings" OFF)
-option(MLN_WITH_GLFW "Set up targets for GLFW platform" ON)
 option(MLN_WITH_SANITIZER "Use [address|thread|undefined] here" OFF)
 option(MLN_WITH_RTTI "Compile with runtime type information" OFF)
 option(MLN_WITH_OPENGL "Build with OpenGL renderer" OFF)
@@ -24,14 +21,6 @@ option(MLN_CREATE_AMALGAMATION "Create static amalgamation of core (requires ame
 
 include(cmake/validate-backend-options.cmake)
 include(cmake/clang-tidy.cmake)
-
-if (MLN_WITH_QT AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET 13.0)
-endif()
-
-if(WIN32 AND NOT DEFINED ENV{MSYSTEM} AND NOT MLN_WITH_QT AND NOT CMAKE_SYSTEM_NAME STREQUAL Android)
-    set(CMAKE_TOOLCHAIN_FILE ${CMAKE_CURRENT_LIST_DIR}/platform/windows/custom-toolchain.cmake)
-endif()
 
 project("MapLibre Native" LANGUAGES CXX C)
 
@@ -86,9 +75,9 @@ target_compile_options(
         $<$<CXX_COMPILER_ID:GNU>:-Wno-error=pragmas>
         $<$<CXX_COMPILER_ID:GNU>:-Wno-psabi>
         $<$<CXX_COMPILER_ID:AppleClang>:-Wno-unknown-warning-option>
-        $<$<AND:$<CXX_COMPILER_ID:AppleClang>,$<NOT:$<BOOL:${MLN_WITH_QT}>>>:-Wno-error=deprecated-declarations>
-        $<$<AND:$<CXX_COMPILER_ID:AppleClang>,$<NOT:$<BOOL:${MLN_WITH_QT}>>>:-Wno-error=unused-parameter>
-        $<$<AND:$<CXX_COMPILER_ID:AppleClang>,$<NOT:$<BOOL:${MLN_WITH_QT}>>>:-Wno-error=unused-property-ivar>
+        $<$<CXX_COMPILER_ID:AppleClang>:-Wno-error=deprecated-declarations>
+        $<$<CXX_COMPILER_ID:AppleClang>:-Wno-error=unused-parameter>
+        $<$<CXX_COMPILER_ID:AppleClang>:-Wno-error=unused-property-ivar>
         $<$<CXX_COMPILER_ID:MSVC>:/utf-8>
         $<$<CXX_COMPILER_ID:MSVC>:/WX>      # all warnings as errors
         $<$<CXX_COMPILER_ID:MSVC>:/EHsc>    # exceptions
@@ -126,11 +115,7 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 
-if(MLN_WITH_QT)
-    add_library(mbgl-core OBJECT)
-else()
-    add_library(mbgl-core STATIC)
-endif()
+add_library(mbgl-core STATIC)
 
 # Override visibility for mbgl-core when building amalgamation
 if(MLN_CREATE_AMALGAMATION)
@@ -1269,22 +1254,13 @@ endif()
 
 include(${PROJECT_SOURCE_DIR}/scripts/license.cmake)
 
-if(MLN_WITH_QT)
-    include(${PROJECT_SOURCE_DIR}/platform/qt/qt.cmake)
-elseif(CMAKE_SYSTEM_NAME STREQUAL Android)
+if(CMAKE_SYSTEM_NAME STREQUAL Android)
     include(${PROJECT_SOURCE_DIR}/platform/android/android.cmake)
-elseif(CMAKE_SYSTEM_NAME STREQUAL Linux)
-    include(${PROJECT_SOURCE_DIR}/platform/linux/linux.cmake)
-elseif(CMAKE_SYSTEM_NAME STREQUAL Darwin)
-    include(${PROJECT_SOURCE_DIR}/platform/darwin/darwin.cmake)
-    include(${PROJECT_SOURCE_DIR}/platform/macos/macos.cmake)
 elseif(CMAKE_SYSTEM_NAME STREQUAL iOS)
     include(${PROJECT_SOURCE_DIR}/platform/darwin/darwin.cmake)
     include(${PROJECT_SOURCE_DIR}/platform/ios/ios.cmake)
-elseif(WIN32)
-    include(${PROJECT_SOURCE_DIR}/platform/windows/windows.cmake)
 else()
-    message(FATAL_ERROR "Unsupported target platform: " ${CMAKE_SYSTEM_NAME})
+    message(FATAL_ERROR "Unsupported target platform: " ${CMAKE_SYSTEM_NAME} " — this fork supports Android and iOS only")
 endif()
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/test)

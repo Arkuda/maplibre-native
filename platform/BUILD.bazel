@@ -2,82 +2,6 @@ load("@aspect_rules_js//js:defs.bzl", "js_binary")
 load("@rules_cc//cc:defs.bzl", "objc_library")
 load("//bazel:flags.bzl", "CPP_FLAGS", "MAPLIBRE_FLAGS", "WARNING_FLAGS")
 
-objc_library(
-    name = "macos-objcpp",
-    srcs = [
-        "//platform/darwin:darwin_objcpp_custom_drawable_srcs",
-        "//platform/darwin:darwin_objcpp_srcs",
-        "//platform/darwin:darwin_private_hdrs",
-        "//platform/darwin:generated_style_srcs",
-        "//platform/macos:macos_objcpp_srcs",
-        "//platform/macos:macos_private_hdrs",
-        "//platform/macos:macos_public_hdrs",
-    ],
-    hdrs = [
-        "//platform/darwin:include/mbgl/util/image+MLNAdditions.hpp",
-    ],
-    copts = CPP_FLAGS + MAPLIBRE_FLAGS + [
-        "-fcxx-modules",
-        "-fmodules",
-        "-Wno-vla-extension",
-        "-Wno-gnu-conditional-omitted-operand",
-        "-Wno-deprecated-declarations",
-    ],
-    includes = [
-        "darwin/include",
-        "darwin/src",
-        "macos/src",
-    ],
-    module_name = "MapLibre",
-    sdk_frameworks = [
-        "Metal",
-        "MetalKit",
-        "QuartzCore",
-        "CoreGraphics",
-        "CoreLocation",
-        "AppKit",
-        "SystemConfiguration",
-    ],
-    visibility = ["//visibility:public"],
-    deps = [
-        "macos-objc",
-        "//:mbgl-core",
-        "//platform/darwin:darwin-generated-style-artifacts",
-        "//platform/darwin:darwin-objcpp",
-        "//platform/default:mbgl-default",
-    ],
-)
-
-objc_library(
-    name = "macos-objc",
-    srcs = [
-        "//platform/darwin:darwin_objc_hdrs",
-        "//platform/darwin:darwin_objc_srcs",
-        "//platform/darwin:darwin_private_hdrs",
-        "//platform/macos:macos_objc_srcs",
-        "//platform/macos:macos_private_hdrs",
-        "//platform/macos:macos_public_hdrs",
-    ],
-    copts = select({
-        "@platforms//os:ios": WARNING_FLAGS["ios"],
-        "@platforms//os:macos": WARNING_FLAGS["macos"],
-    }) + MAPLIBRE_FLAGS + [
-        "-fmodules",
-        "-Wno-deprecated-declarations",
-    ],
-    includes = [
-        "darwin/include",
-        "darwin/src",
-    ],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//:mbgl-core",
-        "//platform/darwin:darwin-generated-style-artifacts",
-        "//platform/darwin:darwin-objc",
-        "//platform/default:mbgl-default",
-    ],
-)
-
 # Objcpp files for the iOS source
 objc_library(
     name = "objcpp-sdk",
@@ -146,7 +70,6 @@ objc_library(
     ],
     copts = select({
         "@platforms//os:ios": WARNING_FLAGS["ios"],
-        "@platforms//os:macos": WARNING_FLAGS["macos"],
     }) + MAPLIBRE_FLAGS + [
         "-fmodules",
         "-Wno-gnu-zero-variadic-macro-arguments",
@@ -326,7 +249,6 @@ js_binary(
         "//:node_modules/lodash",
         "//platform/darwin:symbols-to-check",
         "//platform/ios:symbols-to-check",
-        "//platform/macos:symbols-to-check",
     ],
     entry_point = "scripts/check-public-symbols.js",
 )
