@@ -210,11 +210,17 @@ class StyleLayerTest {
         val fill = StyleLayerFactory.create(fillSpec())
         val line = StyleLayerFactory.create(lineSpec())
         val bg = StyleLayerFactory.create(LayerSpec("bg", LayerType.Background))
+        val circle = StyleLayerFactory.create(LayerSpec("c", LayerType.Circle))
+        val symbol = StyleLayerFactory.create(LayerSpec("s", LayerType.Symbol))
+        val raster = StyleLayerFactory.create(LayerSpec("r", LayerType.Raster))
         assertNotNull(fill)
         assertTrue(fill is FillLayer)
         assertNotNull(line)
         assertTrue(line is LineLayer)
-        assertNull(bg)
+        assertTrue(bg is BackgroundLayer)
+        assertTrue(circle is CircleLayer)
+        assertTrue(symbol is SymbolLayer)
+        assertNull(raster) // raster not ported yet
     }
 
     @Test
