@@ -68,7 +68,7 @@ On iOS the Kotlin/Native framework exports the same interface directly.
 | style model + JSON parser     | `src/mbgl/style/`, `include/mbgl/style/` | ✅ done + tests |
 | expressions (interpolate/step/match/coalesce/case/let/var/compound) | `src/mbgl/style/expression/`, `include/mbgl/style/expression/` | ✅ core engine done (50 tests): Value/Type/Expression, UnitBezier, exponential & cubic-bezier interpolators, step, interpolate (number/color/array), match, coalesce, case, let/var, arithmetic/comparison/boolean/coercion/string ops; `["zoom"]`, `["get"]`, `["has"]` |
 | tile pipeline (loading/cover) | `src/mbgl/tile/`, `src/mbgl/util/tile_cover*` | ✅ core done (71 tests): scan-line tileCover (bounds), tileCount, coveringZoomLevel, Tileset/Scheme, replaceTokens, quadkey/bbox/prefix/ratio URL tokens, FileSource + TileLoader + TileObserver (coroutines) |
-| renderer (GL/Metal backends)  | `src/mbgl/renderer/`, `src/mbgl/gl/`, `src/mbgl/mtl/` | ⬜ pending |
+| renderer (GL/Metal backends)  | `src/mbgl/renderer/`, `src/mbgl/gl/`, `src/mbgl/mtl/` | 🚧 gfx core done (78 tests): Color, ColorMode/DepthMode/StencilMode/CullFaceMode, DrawMode, Context/CommandEncoder/RenderPass/Drawable/ShaderProgram interfaces, expect/actual `createPlatformContext()` — GLES 3.0 backend (Android), Metal backend (iOS), JVM host stub. Layer tweakers/drawables pending |
 
 ## Building & testing
 
