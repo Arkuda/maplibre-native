@@ -4,8 +4,10 @@ import org.maplibre.kotlin.gfx.Color
 import org.maplibre.kotlin.math.Matrix4
 import org.maplibre.kotlin.renderer.bucket.FillBucket
 import org.maplibre.kotlin.renderer.bucket.LineBucket
+import org.maplibre.kotlin.renderer.program.CircleProgram
 import org.maplibre.kotlin.renderer.program.FillProgram
 import org.maplibre.kotlin.renderer.program.LineProgram
+import org.maplibre.kotlin.style.layer.CircleLayer
 import org.maplibre.kotlin.style.layer.FillLayer
 import org.maplibre.kotlin.style.layer.LineLayer
 import org.maplibre.kotlin.tile.TileLayer
@@ -47,6 +49,14 @@ class SoftwareLayerRenderer {
             val bucket: LineBucket,
             val props: LineProgram.Props,
             val lineUniforms: LineProgram.Uniforms,
+        ) : DrawItem()
+
+        /** Circle geometry (point features) with evaluated paint. */
+        class Circle(
+            override val layerId: String,
+            val bucket: org.maplibre.kotlin.renderer.bucket.CircleBucket,
+            val props: CircleProgram.Props,
+            val circleUniforms: CircleProgram.Uniforms,
         ) : DrawItem()
     }
 
@@ -127,6 +137,32 @@ class SoftwareLayerRenderer {
                                 opacity = evaluated.opacity,
                             ),
                             lineUniforms = LineProgram.Uniforms(
+                                matrix = matrix,
+                                devicePixelRatio = pixelRatio,
+                            ),
+                        ),
+                    )
+                }
+
+                is CircleLayer -> {
+                    val bucket = layer.buildBucket(tileLayer)
+                    if (bucket.isEmpty) continue
+                    val evaluated = layer.evaluate(zoom)
+                    out.add(
+                        DrawItem.Circle(
+                            layerId = layer.id,
+                            bucket = bucket,
+                            props = CircleProgram.Props(
+                                color = evaluated.color,
+                                radius = evaluated.radius,
+                                blur = evaluated.blur,
+                                opacity = evaluated.opacity,
+                                strokeColor = evaluated.strokeColor,
+                                strokeWidth = evaluated.strokeWidth,
+                                strokeOpacity = evaluated.strokeOpacity,
+                                scaleWithMap = evaluated.scaleWithMap,
+                            ),
+                            circleUniforms = CircleProgram.Uniforms(
                                 matrix = matrix,
                                 devicePixelRatio = pixelRatio,
                             ),
@@ -247,6 +283,62 @@ class SoftwareLayerRenderer {
             val color = LineProgram.fragmentColor(alpha, props)
 
             fillTriangle(fb, va, vb, vc, color, pixels)
+        }
+        return pixels
+    }
+
+    /**
+     * Rasterizes a circle draw item into an RGBA pixel buffer. Each point
+     * feature projects to a screen-space circle; pixels are shaded with the
+     * circle fragment shader distance field.
+     */
+    fun rasterizeCircle(
+        item: DrawItem.Circle,
+        width: Int,
+        height: Int,
+    ): ByteArray {
+        val pixels = ByteArray(width * height * 4)
+        val fb = framebuffer(width, height)
+        val uniforms = item.circleUniforms
+        val props = item.props
+
+        val radiusOuter = props.radius + props.strokeWidth
+        // circle-radius is specified in pixels; circle-pitch-scale only
+        // changes behaviour when the map is pitched (pitch == 0 here), so the
+        // screen radius is always radius / DPR.
+        val radiusPx = radiusOuter / uniforms.devicePixelRatio
+        if (radiusPx <= 0.0) return pixels
+        val rPx = radiusPx.toInt().coerceAtLeast(1)
+
+        for (i in 0 until item.bucket.vertices.size) {
+            val v = item.bucket.vertices[i]
+            // each point appears 4x (quad corners); only draw once per point
+            if (v.extrudeX != -1.0 || v.extrudeY != -1.0) continue
+
+            val proj = CircleProgram.vertex(v.x.toFloat(), v.y.toFloat(), uniforms)
+            val cx = screenX(proj.clip, fb.width)
+            val cy = screenY(proj.clip, fb.height)
+
+            val minX = maxOf(0, cx - rPx)
+            val maxX = minOf(fb.width - 1, cx + rPx)
+            val minY = maxOf(0, cy - rPx)
+            val maxY = minOf(fb.height - 1, cy + rPx)
+
+            for (y in minY..maxY) {
+                for (x in minX..maxX) {
+                    val dx = (x - cx).toDouble()
+                    val dy = (y - cy).toDouble()
+                    // normalized distance: 0 = center, 1 = outer edge
+                    val d = kotlin.math.sqrt(dx * dx + dy * dy) / radiusPx
+                    val color = CircleProgram.fragment(d, props, uniforms)
+                    if (color.a <= 0.0f) continue
+                    val idx = (y * fb.width + x) * 4
+                    pixels[idx] = (color.r * 255).toInt().coerceIn(0, 255).toByte()
+                    pixels[idx + 1] = (color.g * 255).toInt().coerceIn(0, 255).toByte()
+                    pixels[idx + 2] = (color.b * 255).toInt().coerceIn(0, 255).toByte()
+                    pixels[idx + 3] = (color.a * 255).toInt().coerceIn(0, 255).toByte()
+                }
+            }
         }
         return pixels
     }

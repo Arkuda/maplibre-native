@@ -11,9 +11,10 @@ object StyleLayerFactory {
 
     fun create(spec: LayerSpec): StyleLayer? = when (spec.type) {
         LayerType.Background -> BackgroundLayer(spec)
+        LayerType.Circle -> CircleLayer(spec)
         LayerType.Fill -> FillLayer(spec)
         LayerType.Line -> LineLayer(spec)
-        // Other layer types (symbol, circle, ...) are not ported yet.
+        // Other layer types (symbol, raster, ...) are not ported yet.
         else -> null
     }
 
