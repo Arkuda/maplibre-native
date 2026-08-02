@@ -26,6 +26,13 @@ class SoftwareLayerRenderer {
     sealed class DrawItem {
         abstract val layerId: String
 
+        /** Full-canvas background fill. */
+        class Background(
+            override val layerId: String,
+            val color: Color,
+            val opacity: Float,
+        ) : DrawItem()
+
         /** Fill geometry with evaluated paint. */
         class Fill(
             override val layerId: String,
@@ -65,6 +72,21 @@ class SoftwareLayerRenderer {
         for (layer in layers) {
             if (!layer.isVisible(zoom)) continue
             if (layerFilter != null && !layerFilter(layer.id, layer)) continue
+
+            // Background layers have no tile source: paint the whole canvas.
+            if (layer is org.maplibre.kotlin.style.layer.BackgroundLayer) {
+                val evaluated = layer.evaluate(zoom)
+                if (evaluated.opacity <= 0.0) continue
+                out.add(
+                    DrawItem.Background(
+                        layerId = layer.id,
+                        color = evaluated.color,
+                        opacity = evaluated.opacity.toFloat(),
+                    ),
+                )
+                continue
+            }
+
             val sourceLayerName = layer.sourceLayer
             if (sourceLayerName == null) continue
             val tileLayer = tile.getLayer(sourceLayerName) ?: continue
@@ -119,6 +141,29 @@ class SoftwareLayerRenderer {
     }
 
     // ---- rasterization helpers -------------------------------------------
+
+    /**
+     * Rasterizes a background draw item: fills the whole framebuffer.
+     * @return premultiplied RGBA bytes, row-major, top-down
+     */
+    fun rasterizeBackground(
+        item: DrawItem.Background,
+        width: Int,
+        height: Int,
+    ): ByteArray {
+        val pixels = ByteArray(width * height * 4)
+        val r = (item.color.r * 255 * item.opacity).toInt().coerceIn(0, 255)
+        val g = (item.color.g * 255 * item.opacity).toInt().coerceIn(0, 255)
+        val b = (item.color.b * 255 * item.opacity).toInt().coerceIn(0, 255)
+        val a = (item.color.a * 255 * item.opacity).toInt().coerceIn(0, 255)
+        for (i in 0 until pixels.size step 4) {
+            pixels[i] = r.toByte()
+            pixels[i + 1] = g.toByte()
+            pixels[i + 2] = b.toByte()
+            pixels[i + 3] = a.toByte()
+        }
+        return pixels
+    }
 
     /**
      * Rasterizes a fill draw item into an RGBA pixel buffer.
