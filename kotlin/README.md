@@ -65,7 +65,8 @@ On iOS the Kotlin/Native framework exports the same interface directly.
 | geo (LatLng, bounds, insets)  | `include/mbgl/util/geo.hpp`, `src/mbgl/util/geo.cpp` | ✅ done + tests |
 | projection (Web Mercator)     | `include/mbgl/util/projection.hpp` | ✅ done + tests |
 | tile ids                      | `include/mbgl/tile/tile_id.hpp`    | ✅ done + tests |
-| style model + JSON parser     | `src/mbgl/style/`, `include/mbgl/style/` | 🚧 model + parser done; expressions/zoom functions pending |
+| style model + JSON parser     | `src/mbgl/style/`, `include/mbgl/style/` | ✅ done + tests |
+| expressions (interpolate/step/match/coalesce/case/let/var/compound) | `src/mbgl/style/expression/`, `include/mbgl/style/expression/` | ✅ core engine done (50 tests): Value/Type/Expression, UnitBezier, exponential & cubic-bezier interpolators, step, interpolate (number/color/array), match, coalesce, case, let/var, arithmetic/comparison/boolean/coercion/string ops; `["zoom"]`, `["get"]`, `["has"]` |
 | tile pipeline (loading/cover) | `src/mbgl/tile/`, `src/mbgl/util/tile_cover*` | ⬜ pending |
 | renderer (GL/Metal backends)  | `src/mbgl/renderer/`, `src/mbgl/gl/`, `src/mbgl/mtl/` | ⬜ pending |
 

@@ -1,5 +1,6 @@
 package org.maplibre.kotlin.style
 
+import org.maplibre.kotlin.expression.ExpressionParser
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -135,7 +136,10 @@ object StyleJsonParser {
     private fun parsePropertyValue(element: JsonElement): PropertyValue {
         if (element is JsonArray) {
             // expression: ["interpolate", ...] or ["get", ...]
-            return PropertyValue.Expression(element.toList())
+            val expr = ExpressionParser().parse(element)
+            if (expr != null) {
+                return PropertyValue.Expression(expr)
+            }
         }
         return PropertyValue.Constant(primitiveValue(element))
     }

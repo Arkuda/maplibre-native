@@ -87,6 +87,8 @@ class StyleParserTest {
         assertEquals(5f, roads.minzoom)
         val width = roads.paint["line-width"]
         assertIs<PropertyValue.Expression>(width)
-        assertEquals(7, width.steps.size)
+        val steps = width.expression.serialize()
+        assertEquals("interpolate", steps[0])
+        assertEquals(7, steps.size)
     }
 }

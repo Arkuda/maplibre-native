@@ -85,7 +85,7 @@ enum class LayerType {
 /** Typed property value: constant, or a data-driven expression tree. */
 sealed class PropertyValue {
     data class Constant(val value: Any?) : PropertyValue()
-    data class Expression(val steps: List<Any?>) : PropertyValue()
+    data class Expression(val expression: org.maplibre.kotlin.expression.Expression) : PropertyValue()
 }
 
 /** Typed filter: simple comparison or compound expression. */
