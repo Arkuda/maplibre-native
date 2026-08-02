@@ -67,7 +67,7 @@ On iOS the Kotlin/Native framework exports the same interface directly.
 | tile ids                      | `include/mbgl/tile/tile_id.hpp`    | ✅ done + tests |
 | style model + JSON parser     | `src/mbgl/style/`, `include/mbgl/style/` | ✅ done + tests |
 | expressions (interpolate/step/match/coalesce/case/let/var/compound) | `src/mbgl/style/expression/`, `include/mbgl/style/expression/` | ✅ core engine done (50 tests): Value/Type/Expression, UnitBezier, exponential & cubic-bezier interpolators, step, interpolate (number/color/array), match, coalesce, case, let/var, arithmetic/comparison/boolean/coercion/string ops; `["zoom"]`, `["get"]`, `["has"]` |
-| tile pipeline (loading/cover) | `src/mbgl/tile/`, `src/mbgl/util/tile_cover*` | ⬜ pending |
+| tile pipeline (loading/cover) | `src/mbgl/tile/`, `src/mbgl/util/tile_cover*` | ✅ core done (71 tests): scan-line tileCover (bounds), tileCount, coveringZoomLevel, Tileset/Scheme, replaceTokens, quadkey/bbox/prefix/ratio URL tokens, FileSource + TileLoader + TileObserver (coroutines) |
 | renderer (GL/Metal backends)  | `src/mbgl/renderer/`, `src/mbgl/gl/`, `src/mbgl/mtl/` | ⬜ pending |
 
 ## Building & testing
