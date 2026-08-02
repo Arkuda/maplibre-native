@@ -7,9 +7,11 @@ import org.maplibre.kotlin.renderer.bucket.LineBucket
 import org.maplibre.kotlin.renderer.program.CircleProgram
 import org.maplibre.kotlin.renderer.program.FillProgram
 import org.maplibre.kotlin.renderer.program.LineProgram
+import org.maplibre.kotlin.renderer.program.SymbolProgram
 import org.maplibre.kotlin.style.layer.CircleLayer
 import org.maplibre.kotlin.style.layer.FillLayer
 import org.maplibre.kotlin.style.layer.LineLayer
+import org.maplibre.kotlin.style.layer.SymbolLayer
 import org.maplibre.kotlin.tile.TileLayer
 
 /**
@@ -57,6 +59,14 @@ class SoftwareLayerRenderer {
             val bucket: org.maplibre.kotlin.renderer.bucket.CircleBucket,
             val props: CircleProgram.Props,
             val circleUniforms: CircleProgram.Uniforms,
+        ) : DrawItem()
+
+        /** Text labels (point features) with evaluated paint. */
+        class Symbol(
+            override val layerId: String,
+            val bucket: org.maplibre.kotlin.renderer.bucket.SymbolBucket,
+            val evaluated: org.maplibre.kotlin.style.layer.SymbolLayer.Evaluated,
+            val symbolUniforms: SymbolProgram.Uniforms,
         ) : DrawItem()
     }
 
@@ -163,6 +173,23 @@ class SoftwareLayerRenderer {
                                 scaleWithMap = evaluated.scaleWithMap,
                             ),
                             circleUniforms = CircleProgram.Uniforms(
+                                matrix = matrix,
+                                devicePixelRatio = pixelRatio,
+                            ),
+                        ),
+                    )
+                }
+
+                is SymbolLayer -> {
+                    val bucket = layer.buildBucket(tileLayer)
+                    if (bucket.isEmpty) continue
+                    val evaluated = layer.evaluate(zoom)
+                    out.add(
+                        DrawItem.Symbol(
+                            layerId = layer.id,
+                            bucket = bucket,
+                            evaluated = evaluated,
+                            symbolUniforms = SymbolProgram.Uniforms(
                                 matrix = matrix,
                                 devicePixelRatio = pixelRatio,
                             ),
@@ -338,6 +365,64 @@ class SoftwareLayerRenderer {
                     pixels[idx + 2] = (color.b * 255).toInt().coerceIn(0, 255).toByte()
                     pixels[idx + 3] = (color.a * 255).toInt().coerceIn(0, 255).toByte()
                 }
+            }
+        }
+        return pixels
+    }
+
+    /**
+     * Rasterizes a symbol draw item into an RGBA pixel buffer. Text is drawn
+     * glyph-by-glyph from the embedded bitmap font at the evaluated size.
+     */
+    fun rasterizeSymbol(
+        item: DrawItem.Symbol,
+        width: Int,
+        height: Int,
+    ): ByteArray {
+        val pixels = ByteArray(width * height * 4)
+        val fb = framebuffer(width, height)
+        val uniforms = item.symbolUniforms
+        val ev = item.evaluated
+
+        val scale = (ev.size / 12.0).toFloat() // bitmap font is 12px cap height
+        val charW = (org.maplibre.kotlin.util.BitmapFont.ADVANCE * scale).toInt().coerceAtLeast(1)
+        val charH = (org.maplibre.kotlin.util.BitmapFont.GLYPH_HEIGHT * scale).toInt().coerceAtLeast(1)
+
+        for (instance in item.bucket.instances) {
+            val text = instance.text ?: continue
+
+            val proj = SymbolProgram.vertex(instance.x.toFloat(), instance.y.toFloat(), uniforms)
+            val cx = screenX(proj.clip, fb.width)
+            val cy = screenY(proj.clip, fb.height)
+
+            val textW = text.length * charW
+            // anchor: center by default; anchorX/Y are fractions of the box
+            val x0 = (cx - (textW * ev.anchorX).toInt() + (ev.offsetX * scale).toInt())
+            val y0 = (cy - (charH * ev.anchorY).toInt())
+
+            var gx = x0
+            for (ch in text) {
+                if (!org.maplibre.kotlin.util.BitmapFont.isValid(ch)) {
+                    gx += charW
+                    continue
+                }
+                val glyph = org.maplibre.kotlin.util.BitmapFont.glyph(ch)
+                for (row in 0 until org.maplibre.kotlin.util.BitmapFont.GLYPH_HEIGHT) {
+                    val bits = glyph[row]
+                    val py = y0 + (row * scale).toInt()
+                    if (py < 0 || py >= fb.height) continue
+                    for (col in 0 until org.maplibre.kotlin.util.BitmapFont.GLYPH_WIDTH) {
+                        if (bits and (1 shl col) == 0) continue
+                        val px = gx + (col * scale).toInt()
+                        if (px < 0 || px >= fb.width) continue
+                        val idx = (py * fb.width + px) * 4
+                        pixels[idx] = (ev.color.r * 255 * ev.opacity).toInt().coerceIn(0, 255).toByte()
+                        pixels[idx + 1] = (ev.color.g * 255 * ev.opacity).toInt().coerceIn(0, 255).toByte()
+                        pixels[idx + 2] = (ev.color.b * 255 * ev.opacity).toInt().coerceIn(0, 255).toByte()
+                        pixels[idx + 3] = (ev.opacity * 255).toInt().coerceIn(0, 255).toByte()
+                    }
+                }
+                gx += charW
             }
         }
         return pixels
