@@ -132,8 +132,6 @@ cc_library(
         "//platform:__pkg__",
         "//platform/darwin:__pkg__",
         "//platform/ios:__pkg__",
-        "//platform/linux:__pkg__",
-        "//platform/macos:__pkg__",
         "//test:__pkg__",
     ],
     deps = [

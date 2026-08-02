@@ -37,7 +37,6 @@ cc_library(
         "//vendor:args",
     ] + select({
         "@platforms//os:ios": ["//platform:ios-sdk"],
-        "@platforms//os:linux": ["//platform/linux:impl"],
         "//conditions:default": [],
     }),
 )

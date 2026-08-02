@@ -90,6 +90,5 @@ cc_test(
     tags = ["no-sandbox"],
     deps = [
         "tests",
-        "//platform/linux:impl",
     ],
 )
