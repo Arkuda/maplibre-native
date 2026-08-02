@@ -13,6 +13,9 @@ import org.maplibre.kotlin.style.LayerSpec
 import org.maplibre.kotlin.style.LayerType
 import org.maplibre.kotlin.style.LineCapType
 import org.maplibre.kotlin.style.LineJoinType
+import org.maplibre.kotlin.style.layer.BackgroundLayer
+import org.maplibre.kotlin.style.layer.CircleLayer
+import org.maplibre.kotlin.style.layer.SymbolLayer
 import org.maplibre.kotlin.style.PropertyValue
 import org.maplibre.kotlin.style.layer.FillLayer
 import org.maplibre.kotlin.style.layer.LineLayer
