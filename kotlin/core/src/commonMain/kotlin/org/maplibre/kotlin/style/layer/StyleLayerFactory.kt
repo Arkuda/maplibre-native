@@ -14,8 +14,9 @@ object StyleLayerFactory {
         LayerType.Circle -> CircleLayer(spec)
         LayerType.Fill -> FillLayer(spec)
         LayerType.Line -> LineLayer(spec)
+        LayerType.Raster -> RasterLayer(spec)
         LayerType.Symbol -> SymbolLayer(spec)
-        // Other layer types (raster, hillshade, ...) are not ported yet.
+        // Other layer types (hillshade, ...) are not ported yet.
         else -> null
     }
 

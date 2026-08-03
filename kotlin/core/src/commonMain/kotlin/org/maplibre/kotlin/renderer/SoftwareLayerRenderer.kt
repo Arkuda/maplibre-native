@@ -7,10 +7,12 @@ import org.maplibre.kotlin.renderer.bucket.LineBucket
 import org.maplibre.kotlin.renderer.program.CircleProgram
 import org.maplibre.kotlin.renderer.program.FillProgram
 import org.maplibre.kotlin.renderer.program.LineProgram
+import org.maplibre.kotlin.renderer.program.RasterProgram
 import org.maplibre.kotlin.renderer.program.SymbolProgram
 import org.maplibre.kotlin.style.layer.CircleLayer
 import org.maplibre.kotlin.style.layer.FillLayer
 import org.maplibre.kotlin.style.layer.LineLayer
+import org.maplibre.kotlin.style.layer.RasterLayer
 import org.maplibre.kotlin.style.layer.SymbolLayer
 import org.maplibre.kotlin.tile.TileLayer
 
@@ -68,6 +70,13 @@ class SoftwareLayerRenderer {
             val evaluated: org.maplibre.kotlin.style.layer.SymbolLayer.Evaluated,
             val symbolUniforms: SymbolProgram.Uniforms,
         ) : DrawItem()
+
+        /** Raster tile image with color adjustments. */
+        class Raster(
+            override val layerId: String,
+            val bucket: org.maplibre.kotlin.renderer.bucket.RasterBucket,
+            val props: RasterProgram.Props,
+        ) : DrawItem()
     }
 
     /**
@@ -87,6 +96,8 @@ class SoftwareLayerRenderer {
         matrix: Matrix4,
         pixelRatio: Float = 1.0f,
         layerFilter: ((String, org.maplibre.kotlin.style.layer.StyleLayer) -> Boolean)? = null,
+        /** Raster tiles by source id (for raster layers). */
+        rasterTiles: Map<String, org.maplibre.kotlin.renderer.bucket.RasterBucket> = emptyMap(),
     ): List<DrawItem> {
         val out = mutableListOf<DrawItem>()
         for (layer in layers) {
@@ -102,6 +113,29 @@ class SoftwareLayerRenderer {
                         layerId = layer.id,
                         color = evaluated.color,
                         opacity = evaluated.opacity.toFloat(),
+                    ),
+                )
+                continue
+            }
+
+            // Raster layers draw a raster tile image from the source.
+            if (layer is org.maplibre.kotlin.style.layer.RasterLayer) {
+                val src = layer.source ?: continue
+                val bucket = rasterTiles[src] ?: continue
+                if (bucket.isEmpty) continue
+                val evaluated = layer.evaluate(zoom)
+                out.add(
+                    DrawItem.Raster(
+                        layerId = layer.id,
+                        bucket = bucket,
+                        props = RasterProgram.Props(
+                            opacity = evaluated.opacity.toFloat(),
+                            spinWeights = RasterProgram.spinWeights(evaluated.hueRotate),
+                            saturationFactor = RasterProgram.saturationFactor(evaluated.saturation),
+                            contrastFactor = RasterProgram.contrastFactor(evaluated.contrast),
+                            brightnessLow = evaluated.brightnessMin.toFloat(),
+                            brightnessHigh = evaluated.brightnessMax.toFloat(),
+                        ),
                     ),
                 )
                 continue

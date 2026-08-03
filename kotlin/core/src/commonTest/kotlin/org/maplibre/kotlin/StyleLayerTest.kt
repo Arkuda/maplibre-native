@@ -15,6 +15,7 @@ import org.maplibre.kotlin.style.LineCapType
 import org.maplibre.kotlin.style.LineJoinType
 import org.maplibre.kotlin.style.layer.BackgroundLayer
 import org.maplibre.kotlin.style.layer.CircleLayer
+import org.maplibre.kotlin.style.layer.RasterLayer
 import org.maplibre.kotlin.style.layer.SymbolLayer
 import org.maplibre.kotlin.style.PropertyValue
 import org.maplibre.kotlin.style.layer.FillLayer
@@ -223,7 +224,7 @@ class StyleLayerTest {
         assertTrue(bg is BackgroundLayer)
         assertTrue(circle is CircleLayer)
         assertTrue(symbol is SymbolLayer)
-        assertNull(raster) // raster not ported yet
+        assertTrue(raster is RasterLayer)
     }
 
     @Test
