@@ -4,6 +4,21 @@ import org.maplibre.kotlin.gfx.Color
 import org.maplibre.kotlin.style.LayerSpec
 import org.maplibre.kotlin.tile.TileFeature
 
+/** Hillshade shading algorithm, matching mbgl's HillshadeMethodType. */
+enum class HillshadeMethod {
+    STANDARD, BASIC, COMBINED, IGOR, MULTIDIRECTIONAL;
+
+    companion object {
+        fun fromStyle(value: String): HillshadeMethod = when (value) {
+            "basic" -> BASIC
+            "combined" -> COMBINED
+            "igor" -> IGOR
+            "multidirectional" -> MULTIDIRECTIONAL
+            else -> STANDARD
+        }
+    }
+}
+
 /**
  * Hillshade layer: shaded relief from raster DEM tiles.
  * Ported from mbgl::style::HillshadeLayer (evaluation only; rendering of
@@ -20,7 +35,7 @@ class HillshadeLayer(spec: LayerSpec) : StyleLayer(spec) {
         val highlightColor: Color,
         val accentColor: Color,
         val illuminationAltitude: Double,
-        val method: String,
+        val method: HillshadeMethod,
     )
 
     fun evaluate(zoom: Float, feature: TileFeature? = null): Evaluated = Evaluated(
@@ -34,9 +49,14 @@ class HillshadeLayer(spec: LayerSpec) : StyleLayer(spec) {
         highlightColor = evaluateColor("hillshade-highlight-color", Group.Paint, zoom, feature, Color.white()),
         accentColor = evaluateColor("hillshade-accent-color", Group.Paint, zoom, feature, Color.black()),
         illuminationAltitude = evaluateNumber("hillshade-illumination-altitude", Group.Paint, zoom, feature, 45.0),
-        method = evaluateEnum(
-            "hillshade-method", Group.Paint, zoom, "standard",
-            mapOf("standard" to "standard", "simplified" to "simplified"),
+        method = HillshadeMethod.fromStyle(
+            evaluateEnum(
+                "hillshade-method", Group.Paint, zoom, "standard",
+                mapOf(
+                    "standard" to "standard", "basic" to "basic", "combined" to "combined",
+                    "igor" to "igor", "multidirectional" to "multidirectional",
+                ),
+            ),
         ),
     )
 }

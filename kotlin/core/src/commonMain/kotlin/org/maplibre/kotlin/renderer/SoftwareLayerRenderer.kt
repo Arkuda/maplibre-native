@@ -1,15 +1,20 @@
 package org.maplibre.kotlin.renderer
 
 import org.maplibre.kotlin.gfx.Color
+import org.maplibre.kotlin.math.Camera3D
 import org.maplibre.kotlin.math.Matrix4
+import org.maplibre.kotlin.math.Vec4
 import org.maplibre.kotlin.renderer.bucket.FillBucket
+import org.maplibre.kotlin.renderer.bucket.FillExtrusionBucket
 import org.maplibre.kotlin.renderer.bucket.LineBucket
 import org.maplibre.kotlin.renderer.program.CircleProgram
+import org.maplibre.kotlin.renderer.program.FillExtrusionProgram
 import org.maplibre.kotlin.renderer.program.FillProgram
 import org.maplibre.kotlin.renderer.program.LineProgram
 import org.maplibre.kotlin.renderer.program.RasterProgram
 import org.maplibre.kotlin.renderer.program.SymbolProgram
 import org.maplibre.kotlin.style.layer.CircleLayer
+import org.maplibre.kotlin.style.layer.FillExtrusionLayer
 import org.maplibre.kotlin.style.layer.FillLayer
 import org.maplibre.kotlin.style.layer.LineLayer
 import org.maplibre.kotlin.style.layer.RasterLayer
@@ -27,6 +32,14 @@ import org.maplibre.kotlin.tile.TileLayer
  * rasterizer can turn into pixels.
  */
 class SoftwareLayerRenderer {
+
+    /** Camera parameters for 3D layers (fill-extrusion). */
+    data class CameraSpec(
+        val zoom: Double,
+        val pitchDeg: Double = 0.0,
+        val bearingDeg: Double = 0.0,
+        val latitudeDeg: Double = 0.0,
+    )
 
     /** One ready-to-draw unit: geometry + program inputs. */
     sealed class DrawItem {
@@ -77,6 +90,23 @@ class SoftwareLayerRenderer {
             val bucket: org.maplibre.kotlin.renderer.bucket.RasterBucket,
             val props: RasterProgram.Props,
         ) : DrawItem()
+
+        /**
+         * Extruded 3D geometry. The 3D matrix is built by the rasterizer
+         * from [camera] + the framebuffer size; base/height come from the
+         * bucket vertices (per-feature evaluated).
+         */
+        class FillExtrusion(
+            override val layerId: String,
+            val bucket: FillExtrusionBucket,
+            val color: Color,
+            val verticalGradient: Boolean,
+            val opacity: Double,
+            val lightPos: FloatArray,
+            val lightColor: FloatArray,
+            val lightIntensity: Double,
+            val camera: CameraSpec,
+        ) : DrawItem()
     }
 
     /**
@@ -98,6 +128,8 @@ class SoftwareLayerRenderer {
         layerFilter: ((String, org.maplibre.kotlin.style.layer.StyleLayer) -> Boolean)? = null,
         /** Raster tiles by source id (for raster layers). */
         rasterTiles: Map<String, org.maplibre.kotlin.renderer.bucket.RasterBucket> = emptyMap(),
+        /** Camera for 3D layers (fill-extrusion); null skips 3D layers. */
+        camera: CameraSpec? = null,
     ): List<DrawItem> {
         val out = mutableListOf<DrawItem>()
         for (layer in layers) {
@@ -227,6 +259,29 @@ class SoftwareLayerRenderer {
                                 matrix = matrix,
                                 devicePixelRatio = pixelRatio,
                             ),
+                        ),
+                    )
+                }
+
+                is FillExtrusionLayer -> {
+                    if (camera == null) continue
+                    val bucket = layer.buildBucket(tileLayer, zoom)
+                    if (bucket.isEmpty) continue
+                    val evaluated = layer.evaluate(zoom)
+                    out.add(
+                        DrawItem.FillExtrusion(
+                            layerId = layer.id,
+                            bucket = bucket,
+                            color = evaluated.color,
+                            verticalGradient = evaluated.verticalGradient,
+                            opacity = evaluated.opacity,
+                            lightPos = FillExtrusionProgram.lightPosition(
+                                radial = 1.15, azimuthalDeg = 210.0, polarDeg = 30.0,
+                                bearingDeg = if (evaluated.translateAnchor == "viewport") camera.bearingDeg else 0.0,
+                            ),
+                            lightColor = floatArrayOf(1.0f, 1.0f, 1.0f),
+                            lightIntensity = 0.5,
+                            camera = camera,
                         ),
                     )
                 }
@@ -462,6 +517,56 @@ class SoftwareLayerRenderer {
         return pixels
     }
 
+    /**
+     * Rasterizes a fill-extrusion draw item into an RGBA pixel buffer with a
+     * depth test. Each triangle's vertices are elevated to base/height,
+     * projected through the 3D camera, shaded by [FillExtrusionProgram.vertex],
+     * and rasterized with perspective-correct color/depth interpolation.
+     */
+    fun rasterizeFillExtrusion(
+        item: DrawItem.FillExtrusion,
+        width: Int,
+        height: Int,
+    ): ByteArray {
+        val pixels = ByteArray(width * height * 4)
+        val fb = framebuffer(width, height)
+        // depth buffer: empty = far, so any valid depth passes
+        fb.depth.fill(Float.POSITIVE_INFINITY)
+
+        val uniforms = FillExtrusionProgram.Uniforms(
+            matrix = Camera3D.buildTileMatrix(
+                tileOriginX = 0.0,
+                tileOriginY = 0.0,
+                tileSizePx = width.toDouble(),
+                ppm = Camera3D.pixelsPerMeter(item.camera.zoom, item.camera.latitudeDeg),
+                width = width,
+                height = height,
+                pitchDeg = item.camera.pitchDeg,
+                bearingDeg = item.camera.bearingDeg,
+            ),
+            lightPos = item.lightPos,
+            lightColor = item.lightColor,
+            lightIntensity = item.lightIntensity,
+            color = item.color,
+            verticalGradient = item.verticalGradient,
+            opacity = item.opacity,
+        )
+
+        for (i in 0 until item.bucket.indices.size step 3) {
+            val ia = item.bucket.indices[i]
+            val ib = item.bucket.indices[i + 1]
+            val ic = item.bucket.indices[i + 2]
+            val a = item.bucket.vertices[ia]
+            val b = item.bucket.vertices[ib]
+            val c = item.bucket.vertices[ic]
+            val va = FillExtrusionProgram.vertex(a.x, a.y, a.t.toDouble(), a.nx, a.ny, a.nz, a.base, a.height, uniforms)
+            val vb = FillExtrusionProgram.vertex(b.x, b.y, b.t.toDouble(), b.nx, b.ny, b.nz, b.base, b.height, uniforms)
+            val vc = FillExtrusionProgram.vertex(c.x, c.y, c.t.toDouble(), c.nx, c.ny, c.nz, c.base, c.height, uniforms)
+            fillExtrusionTriangle(fb, va, vb, vc, pixels)
+        }
+        return pixels
+    }
+
     private fun lineTriangleAlpha(
         a: LineProgram.VertexOutput,
         b: LineProgram.VertexOutput,
@@ -604,6 +709,90 @@ class SoftwareLayerRenderer {
                     out[idx + 2] = pb.toByte()
                     out[idx + 3] = pa.toByte()
                 }
+            }
+        }
+    }
+
+    /**
+     * Depth-tested triangle fill with perspective-correct interpolation of
+     * color and NDC depth. Nearer fragments (smaller NDC z) win.
+     */
+    private fun fillExtrusionTriangle(
+        fb: Framebuffer,
+        a: FillExtrusionProgram.VertexOutput,
+        b: FillExtrusionProgram.VertexOutput,
+        c: FillExtrusionProgram.VertexOutput,
+        out: ByteArray,
+    ) {
+        val x1 = screenX(a.clip, fb.width)
+        val y1 = screenY(a.clip, fb.height)
+        val x2 = screenX(b.clip, fb.width)
+        val y2 = screenY(b.clip, fb.height)
+        val x3 = screenX(c.clip, fb.width)
+        val y3 = screenY(c.clip, fb.height)
+
+        val minX = maxOf(0, minOf(x1, x2, x3))
+        val maxX = minOf(fb.width - 1, maxOf(x1, x2, x3))
+        val minY = maxOf(0, minOf(y1, y2, y3))
+        val maxY = minOf(fb.height - 1, maxOf(y1, y2, y3))
+
+        val area = edge(x1, y1, x2, y2, x3, y3)
+        if (area == 0) return
+
+        // normalize winding (screen-space y flip can reverse triangle order)
+        var ax = x1; var ay = y1
+        var bx = x2; var by = y2
+        var cx = x3; var cy = y3
+        var va = a; var vb = b; var vc = c
+        if (area < 0) {
+            val tx = bx; val ty = by
+            bx = cx; by = cy
+            cx = tx; cy = ty
+            val tv = vb
+            vb = vc
+            vc = tv
+        }
+
+        // perspective-correct: interpolate (value / w) against 1/w
+        val wa = 1.0 / a.clip.w
+        val wb = 1.0 / b.clip.w
+        val wc = 1.0 / c.clip.w
+        val rA = va.color.r * wa; val gA = va.color.g * wa; val bA = va.color.b * wa; val aA = va.color.a * wa
+        val rB = vb.color.r * wb; val gB = vb.color.g * wb; val bB = vb.color.b * wb; val aB = vb.color.a * wb
+        val rC = vc.color.r * wc; val gC = vc.color.g * wc; val bC = vc.color.b * wc; val aC = vc.color.a * wc
+        val zA = (va.clip.z / va.clip.w) * wa
+        val zB = (vb.clip.z / vb.clip.w) * wb
+        val zC = (vc.clip.z / vc.clip.w) * wc
+
+        for (y in minY..maxY) {
+            for (x in minX..maxX) {
+                val w0 = edge(bx, by, cx, cy, x, y)
+                val w1 = edge(cx, cy, ax, ay, x, y)
+                val w2 = edge(ax, ay, bx, by, x, y)
+                if (w0 < 0 || w1 < 0 || w2 < 0) continue
+                val sum = (w0 + w1 + w2).toDouble()
+                val l0 = w0 / sum
+                val l1 = w1 / sum
+                val l2 = w2 / sum
+
+                val wInv = l0 * wa + l1 * wb + l2 * wc
+                val z = (l0 * zA + l1 * zB + l2 * zC) / wInv
+
+                val dIdx = y * fb.width + x
+                if (z >= fb.depth[dIdx]) continue
+                fb.depth[dIdx] = z.toFloat()
+
+                val r = ((l0 * rA + l1 * rB + l2 * rC) / wInv).coerceIn(0.0, 1.0)
+                val g = ((l0 * gA + l1 * gB + l2 * gC) / wInv).coerceIn(0.0, 1.0)
+                val bl = ((l0 * bA + l1 * bB + l2 * bC) / wInv).coerceIn(0.0, 1.0)
+                val al = ((l0 * aA + l1 * aB + l2 * aC) / wInv).coerceIn(0.0, 1.0)
+                if (al <= 0.0) continue
+
+                val idx = dIdx * 4
+                out[idx] = (r * 255).toInt().toByte()
+                out[idx + 1] = (g * 255).toInt().toByte()
+                out[idx + 2] = (bl * 255).toInt().toByte()
+                out[idx + 3] = (al * 255).toInt().toByte()
             }
         }
     }
