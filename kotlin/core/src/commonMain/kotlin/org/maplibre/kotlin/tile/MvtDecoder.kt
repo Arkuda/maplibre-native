@@ -82,9 +82,9 @@ object MvtDecoder {
             val wireType = tag and 0x07
             when (field) {
                 VectorTileProto.LAYER_VERSION -> version = reader.readVarint32()
-                VectorTileProto.LAYER_NAME -> name = String(reader.readBytes(), Charsets.UTF_8)
+                VectorTileProto.LAYER_NAME -> name = reader.readBytes().decodeToString()
                 VectorTileProto.LAYER_FEATURES -> features.add(reader.readBytes())
-                VectorTileProto.LAYER_KEYS -> keys.add(String(reader.readBytes(), Charsets.UTF_8))
+                VectorTileProto.LAYER_KEYS -> keys.add(reader.readBytes().decodeToString())
                 VectorTileProto.LAYER_VALUES -> values.add(parseValue(ProtoReader(reader.readBytes())))
                 VectorTileProto.LAYER_EXTENT -> extent = reader.readVarint32()
                 else -> reader.skip(wireType)
@@ -102,7 +102,7 @@ object MvtDecoder {
             val field = tag ushr 3
             val wireType = tag and 0x07
             when (field) {
-                VectorTileProto.VALUE_STRING -> result = TileValue.Str(String(reader.readBytes(), Charsets.UTF_8))
+                VectorTileProto.VALUE_STRING -> result = TileValue.Str(reader.readBytes().decodeToString())
                 VectorTileProto.VALUE_FLOAT -> result = TileValue.Num(reader.readFloat().toDouble())
                 VectorTileProto.VALUE_DOUBLE -> result = TileValue.Num(reader.readDouble())
                 VectorTileProto.VALUE_INT -> result = TileValue.Num(reader.readVarint64().toDouble())

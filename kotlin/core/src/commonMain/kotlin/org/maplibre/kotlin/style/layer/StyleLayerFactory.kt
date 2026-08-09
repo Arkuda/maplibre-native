@@ -12,11 +12,15 @@ object StyleLayerFactory {
     fun create(spec: LayerSpec): StyleLayer? = when (spec.type) {
         LayerType.Background -> BackgroundLayer(spec)
         LayerType.Circle -> CircleLayer(spec)
+        LayerType.ColorRelief -> ColorReliefLayer(spec)
         LayerType.Fill -> FillLayer(spec)
+        LayerType.FillExtrusion -> FillExtrusionLayer(spec)
+        LayerType.Heatmap -> HeatmapLayer(spec)
+        LayerType.Hillshade -> HillshadeLayer(spec)
         LayerType.Line -> LineLayer(spec)
+        LayerType.LocationIndicator -> LocationIndicatorLayer(spec)
         LayerType.Raster -> RasterLayer(spec)
         LayerType.Symbol -> SymbolLayer(spec)
-        // Other layer types (hillshade, ...) are not ported yet.
         else -> null
     }
 

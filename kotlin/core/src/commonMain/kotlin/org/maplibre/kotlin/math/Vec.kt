@@ -1,6 +1,8 @@
 package org.maplibre.kotlin.math
 
 import kotlin.math.sqrt
+import kotlin.math.floor
+import kotlin.math.ceil
 
 /** A 2D point/vector with arithmetic. Mirrors mbgl::Point. */
 data class Point2D<T : Number>(val x: T, val y: T) {
@@ -34,7 +36,7 @@ object VecMath {
     fun dist(a: Vec2, b: Vec2): Double = mag(a - b)
 
     /** Rounds to nearest, half away from zero (mbgl::util::round). */
-    fun round(v: Double): Double = if (v >= 0.0) Math.floor(v + 0.5) else Math.ceil(v - 0.5)
+    fun round(v: Double): Double = if (v >= 0.0) floor(v + 0.5) else ceil(v - 0.5)
 
     /** Component-wise round of a vector. */
     fun round(v: Vec2): Vec2 = Vec2(round(v.x), round(v.y))

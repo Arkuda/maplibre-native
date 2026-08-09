@@ -1,5 +1,7 @@
 package org.maplibre.kotlin.tile
 
+import kotlin.math.pow
+import kotlin.math.round
 import org.maplibre.kotlin.util.DEFAULT_MAX_ZOOM
 import org.maplibre.kotlin.util.EARTH_RADIUS_M
 import org.maplibre.kotlin.util.LatLngBounds
@@ -106,13 +108,34 @@ fun formatDouble(v: Double): String {
 }
 
 private fun shortestDouble(v: Double): String {
-    // try progressively longer decimal representations until round-trip is exact
-    for (digits in 1..17) {
-        val s = String.format("%.${digits}f", v)
-        val parsed = s.toDouble()
-        if (parsed == v) return s
+    // Round to 6 decimal places (sufficient for tile coordinates) and trim
+    val rounded = kotlin.math.round(v * 1e6) / 1e6
+    return if (rounded == rounded.toLong().toDouble()) {
+        rounded.toLong().toString()
+    } else {
+        // simple fixed-format without String.format (not in common)
+        val s = rounded.toString()
+        if (s.contains('E') || s.contains('e')) {
+            // fallback: manual formatting
+            formatFixed(rounded, 6)
+        } else {
+            s
+        }
     }
-    return v.toString()
+}
+
+private fun formatFixed(v: Double, decimals: Int): String {
+    val factor = 10.0.pow(decimals.toDouble())
+    val scaled = kotlin.math.round(v * factor)
+    val intPart = (scaled / factor).toLong()
+    val fracPart = kotlin.math.abs(scaled).toLong() % factor.toLong()
+    return buildString {
+        append(intPart)
+        append('.')
+        val fracStr = fracPart.toString()
+        repeat(decimals - fracStr.length) { append('0') }
+        append(fracStr)
+    }
 }
 
 /**

@@ -112,7 +112,7 @@ class TilesetTest {
             "https://tiles.example.com/{bbox-epsg-3857}.pbf",
             x = 0, y = 0, z = 0,
         )
-        // z0: world bbox in EPSG:3857
-        assertEquals("https://tiles.example.com/-20037508.342789244,-20037508.342789244,20037508.342789244,20037508.342789244.pbf", url)
+        // z0: world bbox in EPSG:3857 (rounded to 6 decimals)
+        assertEquals("https://tiles.example.com/-20037508.342789,-20037508.342789,20037508.342789,20037508.342789.pbf", url)
     }
 }
