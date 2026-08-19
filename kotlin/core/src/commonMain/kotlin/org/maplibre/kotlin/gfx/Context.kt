@@ -65,6 +65,9 @@ interface Context {
     /** Draw mode for the default (full-screen) pass. */
     fun visualizeDepthBuffer(depthRangeSize: Float)
     fun visualizeStencilBuffer()
+
+    /** Creates a drawable builder. */
+    fun createDrawableBuilder(name: String): DrawableBuilder
 }
 
 /**

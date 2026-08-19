@@ -19,9 +19,9 @@ enum class ColorBlendFactorType {
     SrcAlpha, OneMinusSrcAlpha,
     DstAlpha, OneMinusDstAlpha,
     DstColor, OneMinusDstColor,
-    SrcAlphaSaturate,
     ConstantColor, OneMinusConstantColor,
     ConstantAlpha, OneMinusConstantAlpha,
+    SrcAlphaSaturate,
 }
 
 /** Depth function type. */
@@ -96,3 +96,44 @@ data class Size(val width: Int, val height: Int) {
         val Zero = Size(0, 0)
     }
 }
+
+data class Point<T>(val x: T, val y: T)
+
+data class OverscaledTileID(val x: Int, val y: Int, val z: Int)
+
+/** Simple identity class. */
+data class SimpleIdentity(val value: Int = 0)
+
+/** Depth masking type. */
+data class DepthMaskType(val value: Int) // Simplified, will be updated
+
+/** Color mode. */
+enum class ColorMode {
+    Disabled,
+    AlphaBlended,
+    Unblended,
+}
+
+/** Stencil mode. */
+enum class StencilMode {
+    Disabled,
+    Replace,
+    Increment,
+    Decrement,
+}
+
+/** Cull face mode. */
+enum class CullFaceMode {
+    Disabled,
+    Front,
+    Back,
+}
+
+/** Base class for segments. */
+open class SegmentBase
+
+/** Segment with a specific draw mode. */
+data class DrawSegment(
+    val mode: DrawMode,
+    val segment: SegmentBase
+)
