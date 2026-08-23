@@ -6,8 +6,10 @@ import org.maplibre.kotlin.math.Matrix4
 import org.maplibre.kotlin.math.Vec4
 import org.maplibre.kotlin.renderer.bucket.FillBucket
 import org.maplibre.kotlin.renderer.bucket.FillExtrusionBucket
+import org.maplibre.kotlin.renderer.bucket.HeatmapBucket
 import org.maplibre.kotlin.renderer.bucket.LineBucket
 import org.maplibre.kotlin.renderer.program.CircleProgram
+import org.maplibre.kotlin.renderer.program.HeatmapProgram
 import org.maplibre.kotlin.renderer.program.FillExtrusionProgram
 import org.maplibre.kotlin.renderer.program.FillProgram
 import org.maplibre.kotlin.renderer.program.LineProgram
@@ -16,6 +18,7 @@ import org.maplibre.kotlin.renderer.program.SymbolProgram
 import org.maplibre.kotlin.style.layer.CircleLayer
 import org.maplibre.kotlin.style.layer.FillExtrusionLayer
 import org.maplibre.kotlin.style.layer.FillLayer
+import org.maplibre.kotlin.style.layer.HeatmapLayer
 import org.maplibre.kotlin.style.layer.LineLayer
 import org.maplibre.kotlin.style.layer.RasterLayer
 import org.maplibre.kotlin.style.layer.SymbolLayer
