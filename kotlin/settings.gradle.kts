@@ -1,5 +1,3 @@
-rootProject.name = "maplibre-kotlin"
-
 pluginManagement {
     repositories {
         google {
@@ -22,4 +20,7 @@ dependencyResolutionManagement {
     }
 }
 
+rootProject.name = "maplibre-kotlin"
+
 include(":core")
+include(":androidApp")
