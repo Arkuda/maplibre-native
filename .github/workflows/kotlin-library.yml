@@ -37,10 +37,10 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Install Android API 35
-        run: |
-          yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platforms;android-35"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-35"
 
       - name: Test and assemble Android library
         run: ./gradlew :core:jvmTest :core:assembleRelease
