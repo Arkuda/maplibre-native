@@ -15,19 +15,21 @@ kotlin/
 ├── settings.gradle.kts
 ├── build.gradle.kts
 ├── gradle/libs.versions.toml
-└── core/
-    ├── build.gradle.kts
-    └── src/
-        ├── commonMain/kotlin/org/maplibre/kotlin/
-        │   ├── math/       — clamp, wrap, ceil_log2, angle conversions
-        │   ├── util/       — constants, LatLng, LatLngBounds, EdgeInsets,
-        │   │                 ScreenCoordinate, Projection (Web Mercator)
-        │   ├── tile/       — CanonicalTileID, UnwrappedTileID, OverscaledTileID
-        │   ├── style/      — typed style model + StyleJsonParser
-        │   └── map/        — MapEngine boundary interface
-        ├── androidMain/    — Android-specific bits (placeholder)
-        ├── iosMain/        — iOS-specific bits (placeholder)
-        └── commonTest/     — unit tests (JVM host)
+├── core/
+│   ├── build.gradle.kts
+│   └── src/
+│       ├── commonMain/kotlin/org/maplibre/kotlin/
+│       │   ├── math/       — clamp, wrap, ceil_log2, angle conversions
+│       │   ├── util/       — constants, LatLng, LatLngBounds, EdgeInsets,
+│       │   │                 ScreenCoordinate, Projection (Web Mercator)
+│       │   ├── tile/       — CanonicalTileID, decoded vector-tile data
+│       │   ├── style/      — typed style model + StyleJsonParser
+│       │   ├── renderer/   — shared CPU reference rasterizer
+│       │   └── map/        — MapEngine contract + MapEngineImpl
+│       ├── androidMain/    — GLES platform context
+│       ├── iosMain/        — Metal platform context
+│       └── commonTest/     — JVM host tests
+└── androidApp/             — GLSurfaceView host for the shared engine
 ```
 
 ## Why no JSON across the platform boundary?
@@ -48,14 +50,11 @@ interface MapEngine {
 }
 ```
 
-The platform layer (Android activity / iOS view controller) constructs
-`StyleSpec` / `LayerSpec` / `SourceSpec` objects directly. JSON appears only
-at the very edge of the system, in `StyleJsonParser`, when a style document is
-*loaded* — and it is parsed once into typed objects, never re-serialized to
-cross into the engine.
-
-On Android the JVM target makes the platform/engine call a plain method call.
-On iOS the Kotlin/Native framework exports the same interface directly.
+`MapEngineImpl` lives in `commonMain`, so both platform hosts call the same
+typed engine. Android's `MapView` invokes it directly and uploads the returned
+RGBA frame to a GL texture. The Kotlin/Native framework exports the same
+implementation for an iOS host to call directly. No JSON is constructed or
+parsed at either platform/engine boundary.
 
 ## Porting status
 
@@ -68,7 +67,7 @@ On iOS the Kotlin/Native framework exports the same interface directly.
 | style model + JSON parser     | `src/mbgl/style/`, `include/mbgl/style/` | ✅ done + tests |
 | expressions (interpolate/step/match/coalesce/case/let/var/compound) | `src/mbgl/style/expression/`, `include/mbgl/style/expression/` | ✅ core engine done (50 tests): Value/Type/Expression, UnitBezier, exponential & cubic-bezier interpolators, step, interpolate (number/color/array), match, coalesce, case, let/var, arithmetic/comparison/boolean/coercion/string ops; `["zoom"]`, `["get"]`, `["has"]` |
 | tile pipeline (loading/cover) | `src/mbgl/tile/`, `src/mbgl/util/tile_cover*` | ✅ core done (71 tests): scan-line tileCover (bounds), tileCount, coveringZoomLevel, Tileset/Scheme, replaceTokens, quadkey/bbox/prefix/ratio URL tokens, FileSource + TileLoader + TileObserver (coroutines) |
-| renderer (GL/Metal backends)  | `src/mbgl/renderer/`, `src/mbgl/gl/`, `src/mbgl/mtl/` | 🚧 gfx core done (78 tests): Color, ColorMode/DepthMode/StencilMode/CullFaceMode, DrawMode, Context/CommandEncoder/RenderPass/Drawable/ShaderProgram interfaces, expect/actual `createPlatformContext()` — GLES 3.0 backend (Android), Metal backend (iOS), JVM host stub. Layer tweakers/drawables pending |
+| renderer (GL/Metal backends)  | `src/mbgl/renderer/`, `src/mbgl/gl/`, `src/mbgl/mtl/` | 🚧 shared CPU rasterizer + `MapEngineImpl` done: typed style/source/layer lifecycle, geographic ↔ screen conversion, viewport tile coverage, decoded vector-tile rendering, GLES context (Android), Metal context (iOS), JVM host context. GPU drawables and native platform views remain to port. |
 
 ## Building & testing
 
@@ -76,8 +75,8 @@ On iOS the Kotlin/Native framework exports the same interface directly.
 # Host-side unit tests (JVM)
 ./gradlew :core:jvmTest
 
-# Android compilation
-./gradlew :core:compileDebugKotlinAndroid
+# Android application compilation
+./gradlew :androidApp:compileDebugKotlinAndroid
 
 # iOS framework (requires macOS/Xcode)
 ./gradlew :core:linkDebugFrameworkIosArm64

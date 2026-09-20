@@ -66,8 +66,6 @@ interface Context {
     fun visualizeDepthBuffer(depthRangeSize: Float)
     fun visualizeStencilBuffer()
 
-    /** Creates a drawable builder. */
-    fun createDrawableBuilder(name: String): DrawableBuilder
 }
 
 /**

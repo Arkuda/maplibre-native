@@ -1,7 +1,5 @@
-package org.maplibre.kotlin.android
+package org.maplibre.kotlin.map
 
-import org.maplibre.kotlin.map.CameraState
-import org.maplibre.kotlin.map.MapEngine
 import org.maplibre.kotlin.math.Matrix4
 import org.maplibre.kotlin.renderer.SoftwareLayerRenderer
 import org.maplibre.kotlin.style.LayerSpec
@@ -16,14 +14,17 @@ import org.maplibre.kotlin.util.LatLng
 import org.maplibre.kotlin.util.Projection
 import org.maplibre.kotlin.util.ScreenCoordinate
 import org.maplibre.kotlin.util.TILE_SIZE
+import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.pow
 
 /**
- * Typed [MapEngine] implementation using the software rasterizer.
+ * Platform-neutral typed [MapEngine] implementation using the software
+ * rasterizer.
  *
  * Each visible tile is rasterized into its own RGBA buffer, then composited
- * at its screen offset (center-anchored). The platform layer uploads the
- * resulting buffer as a GL texture on a fullscreen quad.
+ * at its screen offset. Android and iOS call this directly from their
+ * platform views; no serialized bridge crosses the boundary.
  */
 class MapEngineImpl : MapEngine {
 
@@ -36,20 +37,33 @@ class MapEngineImpl : MapEngine {
 
     private val renderer = SoftwareLayerRenderer()
     private val cache = HashMap<CanonicalTileID, VectorTileData>()
+    private val sources = LinkedHashMap<String, SourceSpec>()
     private var widthPx = 0
     private var heightPx = 0
 
-    /** Renders the current viewport into a screen-sized RGBA buffer. */
-    fun renderFrame(widthPx: Int, heightPx: Int, pixelRatio: Float): ByteArray {
-        val w = (widthPx * pixelRatio).toInt().coerceAtLeast(1)
-        val h = (heightPx * pixelRatio).toInt().coerceAtLeast(1)
+    private var pixelRatio = 1.0f
+    /**
+     * Renders a logical-size viewport into a physical-pixel RGBA buffer.
+     *
+     * [width] and [height] are logical pixels; [pixelRatio] scales both the
+     * framebuffer and the per-tile rasterization resolution.
+     */
+    fun renderFrame(width: Int, height: Int, pixelRatio: Float = 1.0f): ByteArray {
+        require(width >= 0) { "width must be non-negative" }
+        require(height >= 0) { "height must be non-negative" }
+        require(pixelRatio > 0.0f) { "pixelRatio must be positive" }
+
+        val w = (width * pixelRatio).toInt().coerceAtLeast(1)
+        val h = (height * pixelRatio).toInt().coerceAtLeast(1)
         this.widthPx = w
         this.heightPx = h
+        this.pixelRatio = pixelRatio
         val out = ByteArray(w * h * 4)
 
         val layers = layers
         if (layers.isEmpty() || style == null) return out
 
+        val tileWidth = (TILE_SIZE * pixelRatio).toInt()
         for (tile in visibleTiles()) {
             val data = cache[tile] ?: continue
             if (data.layers.isEmpty()) continue
@@ -58,7 +72,7 @@ class MapEngineImpl : MapEngine {
                 layers = layers,
                 tile = data,
                 zoom = zoom.toFloat(),
-                matrix = tileMatrix(tile, w, h, pixelRatio),
+                matrix = tileMatrix(),
                 pixelRatio = pixelRatio,
                 camera = SoftwareLayerRenderer.CameraSpec(
                     zoom = zoom,
@@ -68,61 +82,49 @@ class MapEngineImpl : MapEngine {
                 ),
             )
 
-            val tileW = (TILE_SIZE * pixelRatio).toInt()
-            val (tilePixels, sx, sy) = rasterizeTile(items, tileW, tile, widthPx, heightPx, pixelRatio)
-            blit(out, w, h, tilePixels, tileW, tileW, sx, sy)
+            val (tilePixels, sx, sy) = rasterizeTile(items, tileWidth, tile)
+            blit(out, w, h, tilePixels, tileWidth, tileWidth, sx, sy)
         }
         return out
     }
 
-    /** Matrix mapping tile units [0..EXTENT] → screen pixels. */
-    private fun tileMatrix(tile: CanonicalTileID, w: Int, h: Int, pixelRatio: Float): Matrix4 {
-        val p = Projection.project(center, tile.z.toInt())
-        val scale = (TILE_SIZE * pixelRatio).toDouble()
-
-        // Tile origin in world (fractional tile) coords, relative to center.
-        val ox = tile.x.toDouble() - p.x
-        val oy = tile.y.toDouble() - p.y
-        val sx = w / 2.0 + ox * scale
-        val sy = h / 2.0 + oy * scale
-
-        // Tile units [0..EXTENT] → [0..TILE_SIZE] px → screen.
-        val s = (scale / EXTENT).toFloat()
-        return Matrix4.translate(sx.toFloat(), sy.toFloat(), 0f)
-            .times(Matrix4.scale(s))
-    }
+    /** Matrix mapping tile units [0..EXTENT] to the rasterizer's clip space. */
+    private fun tileMatrix(): Matrix4 = Matrix4(
+        floatArrayOf(
+            2.0f / EXTENT, 0f, 0f, 0f,
+            0f, -2.0f / EXTENT, 0f, 0f,
+            0f, 0f, 1f, 0f,
+            -1f, 1f, 0f, 1f,
+        ),
+    )
 
     private fun rasterizeTile(
         items: List<SoftwareLayerRenderer.DrawItem>,
-        tileW: Int,
+        tileWidth: Int,
         tile: CanonicalTileID,
-        widthPx: Int,
-        heightPx: Int,
-        pixelRatio: Float,
     ): Triple<ByteArray, Int, Int> {
-        val pixels = ByteArray(tileW * tileW * 4)
+        val pixels = ByteArray(tileWidth * tileWidth * 4)
         for (item in items) {
             when (item) {
                 is SoftwareLayerRenderer.DrawItem.Background ->
-                    composite(pixels, renderer.rasterizeBackground(item, tileW, tileW))
+                    composite(pixels, renderer.rasterizeBackground(item, tileWidth, tileWidth))
                 is SoftwareLayerRenderer.DrawItem.Fill ->
-                    composite(pixels, renderer.rasterizeFill(item, tileW, tileW))
+                    composite(pixels, renderer.rasterizeFill(item, tileWidth, tileWidth))
                 is SoftwareLayerRenderer.DrawItem.Line ->
-                    composite(pixels, renderer.rasterizeLine(item, tileW, tileW))
+                    composite(pixels, renderer.rasterizeLine(item, tileWidth, tileWidth))
                 is SoftwareLayerRenderer.DrawItem.Circle ->
-                    composite(pixels, renderer.rasterizeCircle(item, tileW, tileW))
+                    composite(pixels, renderer.rasterizeCircle(item, tileWidth, tileWidth))
                 is SoftwareLayerRenderer.DrawItem.Symbol ->
-                    composite(pixels, renderer.rasterizeSymbol(item, tileW, tileW))
+                    composite(pixels, renderer.rasterizeSymbol(item, tileWidth, tileWidth))
                 is SoftwareLayerRenderer.DrawItem.Raster -> Unit
                 is SoftwareLayerRenderer.DrawItem.FillExtrusion -> Unit
             }
         }
 
-        // Screen offset of this tile (center-anchored).
+        // [Projection.project] at an integer zoom returns tile-space units.
         val p = Projection.project(center, tile.z.toInt())
-        val world = (1 shl tile.z.toInt()) * TILE_SIZE * pixelRatio
-        val sx = (widthPx * pixelRatio / 2.0 + (tile.x.toDouble() - p.x) * world).toInt()
-        val sy = (heightPx * pixelRatio / 2.0 + (tile.y.toDouble() - p.y) * world).toInt()
+        val sx = (widthPx / 2.0 + (tile.x.toDouble() - p.x) * tileWidth).toInt()
+        val sy = (heightPx / 2.0 + (tile.y.toDouble() - p.y) * tileWidth).toInt()
         return Triple(pixels, sx, sy)
     }
 
@@ -165,15 +167,27 @@ class MapEngineImpl : MapEngine {
 
     override fun setStyle(style: StyleSpec) {
         this.style = style
-        this.layers = StyleLayerFactory.createAll(style.layers)
+        sources.clear()
+        sources.putAll(style.sources)
+        layers = StyleLayerFactory.createAll(style.layers)
     }
 
-    override fun addSource(source: SourceSpec) {}
-    override fun removeSource(sourceId: String): Boolean = false
+    override fun addSource(source: SourceSpec) {
+        sources[source.id] = source
+    }
+
+    override fun removeSource(sourceId: String): Boolean = sources.remove(sourceId) != null
 
     override fun addLayer(layer: LayerSpec) {
-        StyleLayerFactory.create(layer)?.let { layers = layers + it }
+        val created = StyleLayerFactory.create(layer) ?: return
+        val belowIndex = layer.below?.let { below -> layers.indexOfFirst { it.id == below } } ?: -1
+        layers = if (belowIndex < 0) {
+            layers + created
+        } else {
+            layers.toMutableList().apply { add(belowIndex, created) }
+        }
     }
+
     override fun removeLayer(layerId: String): Boolean {
         val before = layers.size
         layers = layers.filterNot { it.id == layerId }
@@ -190,24 +204,24 @@ class MapEngineImpl : MapEngine {
     override fun getCamera(): CameraState = CameraState(center, zoom, bearing, pitch)
 
     override fun screenCoordinateToLatLng(screen: ScreenCoordinate): LatLng {
-        val c = Projection.project(center, zoom)
-        val scale = Projection.worldSize(zoom)
+        val scale = worldScale()
+        val c = Projection.project(center, scale)
         return Projection.unproject(
             ScreenCoordinate(
-                c.x + (screen.x - widthPx / 2.0) / scale,
-                c.y - (screen.y - heightPx / 2.0) / scale,
+                c.x + screen.x - widthPx / 2.0,
+                c.y + screen.y - heightPx / 2.0,
             ),
-            zoom,
+            scale,
         )
     }
 
     override fun latLngToScreenCoordinate(latLng: LatLng): ScreenCoordinate {
-        val p = Projection.project(latLng, zoom)
-        val c = Projection.project(center, zoom)
-        val scale = Projection.worldSize(zoom)
+        val scale = worldScale()
+        val p = Projection.project(latLng, scale)
+        val c = Projection.project(center, scale)
         return ScreenCoordinate(
-            x = (p.x - c.x) * scale + widthPx / 2.0,
-            y = (c.y - p.y) * scale + heightPx / 2.0,
+            x = p.x - c.x + widthPx / 2.0,
+            y = p.y - c.y + heightPx / 2.0,
         )
     }
 
@@ -215,10 +229,31 @@ class MapEngineImpl : MapEngine {
         val z = floor(zoom).toInt().coerceIn(0, 22)
         val n = 1 shl z
         val p = Projection.project(center, z)
-        val cx = floor(p.x).toInt().coerceIn(0, n - 1)
-        val cy = floor(p.y).toInt().coerceIn(0, n - 1)
-        return listOf(CanonicalTileID(z.toUByte(), cx.toUInt(), cy.toUInt()))
+        val centerTile = CanonicalTileID(
+            z.toUByte(),
+            floor(p.x).toInt().coerceIn(0, n - 1).toUInt(),
+            floor(p.y).toInt().coerceIn(0, n - 1).toUInt(),
+        )
+        if (widthPx == 0 || heightPx == 0) return listOf(centerTile)
+
+        val tileSizePx = TILE_SIZE * pixelRatio
+        val halfWidth = widthPx / (2.0 * tileSizePx)
+        val halfHeight = heightPx / (2.0 * tileSizePx)
+        val minX = floor(p.x - halfWidth).toInt().coerceIn(0, n - 1)
+        val maxX = (ceil(p.x + halfWidth).toInt() - 1).coerceIn(0, n - 1)
+        val minY = floor(p.y - halfHeight).toInt().coerceIn(0, n - 1)
+        val maxY = (ceil(p.y + halfHeight).toInt() - 1).coerceIn(0, n - 1)
+
+        return buildList((maxX - minX + 1) * (maxY - minY + 1)) {
+            for (y in minY..maxY) {
+                for (x in minX..maxX) {
+                    add(CanonicalTileID(z.toUByte(), x.toUInt(), y.toUInt()))
+                }
+            }
+        }
     }
+
+    private fun worldScale(): Double = 2.0.pow(zoom)
 
     /** Injects a decoded tile into the cache. */
     fun putTile(id: CanonicalTileID, data: VectorTileData) {

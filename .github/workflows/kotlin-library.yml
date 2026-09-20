@@ -1,0 +1,80 @@
+name: kotlin-library
+
+on:
+  pull_request:
+    paths:
+      - "kotlin/**"
+      - ".github/workflows/kotlin-library.yml"
+  push:
+    branches: [main]
+    paths:
+      - "kotlin/**"
+      - ".github/workflows/kotlin-library.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kotlin-library-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android AAR and JVM tests
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: kotlin
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Install Android API 35
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platforms;android-35"
+
+      - name: Test and assemble Android library
+        run: ./gradlew :core:jvmTest :core:assembleRelease
+
+      - name: Upload Android library
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: maplibre-kotlin-android-aar
+          if-no-files-found: error
+          path: kotlin/core/build/outputs/aar/core-release.aar
+
+  ios:
+    name: iOS simulator framework
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: kotlin
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Build iOS simulator framework
+        run: ./gradlew :core:linkDebugFrameworkIosSimulatorArm64
+
+      - name: Upload iOS framework
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: maplibre-kotlin-ios-framework
+          if-no-files-found: error
+          path: kotlin/core/build/bin/iosSimulatorArm64/debugFramework/MapLibreKotlin.framework

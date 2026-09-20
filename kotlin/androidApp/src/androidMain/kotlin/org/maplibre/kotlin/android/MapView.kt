@@ -7,6 +7,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
+import org.maplibre.kotlin.map.MapEngineImpl
 
 /**
  * [GLSurfaceView] that renders the software-rasterized map frame into a GL
@@ -46,10 +47,9 @@ class MapView(context: Context) : GLSurfaceView(context) {
         }
 
         override fun onDrawFrame(gl: GL10?) {
-            val density = resources.displayMetrics.density
             val w = width
             val h = height
-            val buf = engine.renderFrame(w, h, density)
+            val buf = engine.renderFrame(w, h)
 
             val texW = w
             val texH = h
