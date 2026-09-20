@@ -63,70 +63,95 @@ class MapEngineImpl : MapEngine {
         val layers = layers
         if (layers.isEmpty() || style == null) return out
 
-        val tileWidth = (TILE_SIZE * pixelRatio).toInt()
+        val backgroundMatrix = tileMatrix(EXTENT.toFloat())
+        val camera = SoftwareLayerRenderer.CameraSpec(
+            zoom = zoom,
+            pitchDeg = pitch,
+            bearingDeg = bearing,
+            latitudeDeg = center.latitude,
+        )
+
+        // Background layers cover the viewport even when no tile is cached.
+        for (item in renderer.render(
+            layers = layers,
+            tile = VectorTileData(emptyMap()),
+            zoom = zoom.toFloat(),
+            matrix = backgroundMatrix,
+            pixelRatio = pixelRatio,
+            camera = camera,
+        )) {
+            if (item is SoftwareLayerRenderer.DrawItem.Background) {
+                composite(out, renderer.rasterizeBackground(item, w, h))
+            }
+        }
+
         for (tile in visibleTiles()) {
             val data = cache[tile] ?: continue
             if (data.layers.isEmpty()) continue
 
+            val tileExtent = data.layers.values.firstOrNull()?.extent?.toFloat() ?: EXTENT.toFloat()
             val items = renderer.render(
                 layers = layers,
                 tile = data,
                 zoom = zoom.toFloat(),
-                matrix = tileMatrix(),
+                matrix = viewportTileMatrix(tileExtent, tile, w, h),
                 pixelRatio = pixelRatio,
-                camera = SoftwareLayerRenderer.CameraSpec(
-                    zoom = zoom,
-                    pitchDeg = pitch,
-                    bearingDeg = bearing,
-                    latitudeDeg = center.latitude,
-                ),
+                camera = camera,
             )
-
-            val (tilePixels, sx, sy) = rasterizeTile(items, tileWidth, tile)
-            blit(out, w, h, tilePixels, tileWidth, tileWidth, sx, sy)
+            for (item in items) {
+                rasterizeViewport(item, out, w, h)
+            }
         }
         return out
     }
 
     /** Matrix mapping tile units [0..EXTENT] to the rasterizer's clip space. */
-    private fun tileMatrix(): Matrix4 = Matrix4(
+    private fun tileMatrix(extent: Float): Matrix4 = Matrix4(
         floatArrayOf(
-            2.0f / EXTENT, 0f, 0f, 0f,
-            0f, -2.0f / EXTENT, 0f, 0f,
+            2.0f / extent, 0f, 0f, 0f,
+            0f, -2.0f / extent, 0f, 0f,
             0f, 0f, 1f, 0f,
             -1f, 1f, 0f, 1f,
         ),
     )
 
-    private fun rasterizeTile(
-        items: List<SoftwareLayerRenderer.DrawItem>,
-        tileWidth: Int,
+    private fun viewportTileMatrix(
+        extent: Float,
         tile: CanonicalTileID,
-    ): Triple<ByteArray, Int, Int> {
-        val pixels = ByteArray(tileWidth * tileWidth * 4)
-        for (item in items) {
-            when (item) {
-                is SoftwareLayerRenderer.DrawItem.Background ->
-                    composite(pixels, renderer.rasterizeBackground(item, tileWidth, tileWidth))
-                is SoftwareLayerRenderer.DrawItem.Fill ->
-                    composite(pixels, renderer.rasterizeFill(item, tileWidth, tileWidth))
-                is SoftwareLayerRenderer.DrawItem.Line ->
-                    composite(pixels, renderer.rasterizeLine(item, tileWidth, tileWidth))
-                is SoftwareLayerRenderer.DrawItem.Circle ->
-                    composite(pixels, renderer.rasterizeCircle(item, tileWidth, tileWidth))
-                is SoftwareLayerRenderer.DrawItem.Symbol ->
-                    composite(pixels, renderer.rasterizeSymbol(item, tileWidth, tileWidth))
-                is SoftwareLayerRenderer.DrawItem.Raster -> Unit
-                is SoftwareLayerRenderer.DrawItem.FillExtrusion -> Unit
-            }
-        }
-
-        // [Projection.project] at an integer zoom returns tile-space units.
-        val p = Projection.project(center, tile.z.toInt())
-        val sx = (widthPx / 2.0 + (tile.x.toDouble() - p.x) * tileWidth).toInt()
-        val sy = (heightPx / 2.0 + (tile.y.toDouble() - p.y) * tileWidth).toInt()
-        return Triple(pixels, sx, sy)
+        viewportWidth: Int,
+        viewportHeight: Int,
+    ): Matrix4 {
+        val tileSize = (TILE_SIZE * pixelRatio).toFloat()
+        val centerTile = Projection.project(center, tile.z.toInt())
+        return Matrix4(
+            floatArrayOf(
+                2f * tileSize / (extent * viewportWidth), 0f, 0f, 0f,
+                0f, -2f * tileSize / (extent * viewportHeight), 0f, 0f,
+                0f, 0f, 1f, 0f,
+                (2.0 * (tile.x.toDouble() - centerTile.x) * tileSize.toDouble() / viewportWidth).toFloat(),
+                (-2.0 * (tile.y.toDouble() - centerTile.y) * tileSize.toDouble() / viewportHeight).toFloat(),
+                0f, 1f,
+            ),
+        )
     }
+
+    private fun rasterizeViewport(
+        item: SoftwareLayerRenderer.DrawItem,
+        target: ByteArray,
+        width: Int,
+        height: Int,
+    ) {
+        when (item) {
+            is SoftwareLayerRenderer.DrawItem.Background -> Unit
+            is SoftwareLayerRenderer.DrawItem.Fill -> composite(target, renderer.rasterizeFill(item, width, height))
+            is SoftwareLayerRenderer.DrawItem.Line -> composite(target, renderer.rasterizeLine(item, width, height))
+            is SoftwareLayerRenderer.DrawItem.Circle -> composite(target, renderer.rasterizeCircle(item, width, height))
+            is SoftwareLayerRenderer.DrawItem.Symbol -> composite(target, renderer.rasterizeSymbol(item, width, height))
+            is SoftwareLayerRenderer.DrawItem.Raster,
+            is SoftwareLayerRenderer.DrawItem.FillExtrusion -> Unit
+        }
+    }
+
 
     private fun composite(dst: ByteArray, src: ByteArray) {
         for (i in 0 until dst.size step 4) {
@@ -141,25 +166,6 @@ class MapEngineImpl : MapEngine {
                 dst[i + c] = ((s + d) / oa).toInt().coerceIn(0, 255).toByte()
             }
             dst[i + 3] = (oa * 255).toInt().coerceIn(0, 255).toByte()
-        }
-    }
-
-    private fun blit(
-        dst: ByteArray, dw: Int, dh: Int,
-        src: ByteArray, sw: Int, sh: Int,
-        sx: Int, sy: Int,
-    ) {
-        for (y in 0 until sh) {
-            val dy = sy + y
-            if (dy < 0 || dy >= dh) continue
-            for (x in 0 until sw) {
-                val dx = sx + x
-                if (dx < 0 || dx >= dw) continue
-                val si = (y * sw + x) * 4
-                val di = (dy * dw + dx) * 4
-                dst[di] = src[si]; dst[di + 1] = src[si + 1]
-                dst[di + 2] = src[si + 2]; dst[di + 3] = src[si + 3]
-            }
         }
     }
 

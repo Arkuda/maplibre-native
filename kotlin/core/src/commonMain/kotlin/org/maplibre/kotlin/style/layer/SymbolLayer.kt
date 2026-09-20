@@ -45,7 +45,7 @@ class SymbolLayer(spec: LayerSpec) : StyleLayer(spec) {
     fun textOf(feature: TileFeature): String? {
         val v = evaluateValue("text-field", Group.Layout, 0f, feature, Value.Null)
         return when (v) {
-            is Value.String -> v.value
+            is Value.String -> expandTemplate(v.value, feature)
             is Value.Number -> formatNumber(v.value)
             else -> null
         }
@@ -53,6 +53,16 @@ class SymbolLayer(spec: LayerSpec) : StyleLayer(spec) {
 
     private fun formatNumber(n: Double): String =
         if (n == n.toLong().toDouble()) n.toLong().toString() else n.toString()
+
+    private fun expandTemplate(template: String, feature: TileFeature): String =
+        TEMPLATE_TOKEN.replace(template) { match ->
+            when (val value = feature.properties[match.groupValues[1]]) {
+                is org.maplibre.kotlin.tile.TileValue.Str -> value.value
+                is org.maplibre.kotlin.tile.TileValue.Num -> formatNumber(value.value)
+                is org.maplibre.kotlin.tile.TileValue.Bool -> value.value.toString()
+                else -> ""
+            }
+        }
 
     /** Builds a symbol bucket for this layer from a decoded tile layer. */
     fun buildBucket(tileLayer: TileLayer): SymbolBucket {
@@ -62,6 +72,7 @@ class SymbolLayer(spec: LayerSpec) : StyleLayer(spec) {
     }
 
     private companion object {
+        val TEMPLATE_TOKEN = Regex("""\{([^{}]+)\}""")
         val ANCHORS = mapOf(
             "center" to "center", "top" to "top", "bottom" to "bottom",
             "left" to "left", "right" to "right",

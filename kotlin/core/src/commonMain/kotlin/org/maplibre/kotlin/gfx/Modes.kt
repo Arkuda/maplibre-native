@@ -28,10 +28,11 @@ data class Color(
         fun blue() = Color(0.0f, 0.0f, 1.0f, 1.0f)
         fun transparent() = Color(0.0f, 0.0f, 0.0f, 0.0f)
 
-        /** Parses "#rgb", "#rrggbb", "#rrggbbaa" or a small set of named colors. */
+        /** Parses CSS hex, HSL(A), or a small set of named colors. */
         fun parse(s: String): Color? {
+            val value = s.trim()
             // named colors take precedence (e.g. "red" is not a valid hex digit string)
-            val named = when (s.lowercase()) {
+            val named = when (value.lowercase()) {
                 "red" -> red()
                 "green" -> green()
                 "blue" -> blue()
@@ -41,8 +42,9 @@ data class Color(
                 else -> null
             }
             if (named != null) return named
+            parseHsl(value)?.let { return it }
 
-            val hex = s.removePrefix("#")
+            val hex = value.removePrefix("#")
             if (hex.length == 6 || hex.length == 8) {
                 val r = hex.substring(0, 2).toIntOrNull(16) ?: return null
                 val g = hex.substring(2, 4).toIntOrNull(16) ?: return null
@@ -57,6 +59,32 @@ data class Color(
                 return Color(r / 15f, g / 15f, b / 15f, 1.0f)
             }
             return null
+        }
+
+        private fun parseHsl(value: String): Color? {
+            val match = Regex(
+                """hsla?\(\s*([-+]?\d*\.?\d+)\s*,\s*([-+]?\d*\.?\d+)%\s*,\s*([-+]?\d*\.?\d+)%\s*(?:,\s*([-+]?\d*\.?\d+)\s*)?\)""",
+                RegexOption.IGNORE_CASE,
+            ).matchEntire(value) ?: return null
+            val hue = match.groupValues[1].toFloatOrNull() ?: return null
+            val saturation = match.groupValues[2].toFloatOrNull()?.div(100f) ?: return null
+            val lightness = match.groupValues[3].toFloatOrNull()?.div(100f) ?: return null
+            val alpha = match.groupValues[4].takeIf { it.isNotEmpty() }?.toFloatOrNull() ?: 1f
+            if (saturation !in 0f..1f || lightness !in 0f..1f || alpha !in 0f..1f) return null
+
+            val normalizedHue = ((hue % 360f) + 360f) % 360f
+            val chroma = (1f - kotlin.math.abs(2f * lightness - 1f)) * saturation
+            val x = chroma * (1f - kotlin.math.abs((normalizedHue / 60f) % 2f - 1f))
+            val (r, g, b) = when (normalizedHue) {
+                in 0f..<60f -> Triple(chroma, x, 0f)
+                in 60f..<120f -> Triple(x, chroma, 0f)
+                in 120f..<180f -> Triple(0f, chroma, x)
+                in 180f..<240f -> Triple(0f, x, chroma)
+                in 240f..<300f -> Triple(x, 0f, chroma)
+                else -> Triple(chroma, 0f, x)
+            }
+            val m = lightness - chroma / 2f
+            return Color(r + m, g + m, b + m, alpha)
         }
     }
 }

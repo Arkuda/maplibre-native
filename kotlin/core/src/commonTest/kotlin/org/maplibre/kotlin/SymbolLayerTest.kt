@@ -81,6 +81,21 @@ class SymbolLayerTest {
     }
 
     @Test
+    fun textOfExpandsFeatureTemplate() {
+        val layer = StyleLayerFactory.create(
+            LayerSpec(
+                id = "labels",
+                type = LayerType.Symbol,
+                source = "map",
+                sourceLayer = "places",
+                layout = mapOf("text-field" to PropertyValue.Constant("{name} ({pop})")),
+            ),
+        ) as SymbolLayer
+        val feature = labelTile().getLayer("places")!!.features[0]
+        assertEquals("OSLO (12.5)", layer.textOf(feature))
+    }
+
+    @Test
     fun bucketBuildsInstancePerPoint() {
         val layer = symbolLayer()
         val bucket = layer.buildBucket(labelTile().getLayer("places")!!)

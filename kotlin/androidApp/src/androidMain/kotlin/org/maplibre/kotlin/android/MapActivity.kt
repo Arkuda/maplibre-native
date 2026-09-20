@@ -3,93 +3,68 @@ package org.maplibre.kotlin.android
 import android.app.Activity
 import android.os.Bundle
 import android.widget.FrameLayout
-import org.maplibre.kotlin.gfx.Color
-import org.maplibre.kotlin.style.LayerSpec
-import org.maplibre.kotlin.style.LayerType
-import org.maplibre.kotlin.style.PropertyValue
-import org.maplibre.kotlin.style.SourceSpec
-import org.maplibre.kotlin.style.StyleSpec
-import org.maplibre.kotlin.tile.CanonicalTileID
-import org.maplibre.kotlin.tile.FeatureType
-import org.maplibre.kotlin.tile.TileFeature
-import org.maplibre.kotlin.tile.TileLayer
-import org.maplibre.kotlin.tile.TilePoint
-import org.maplibre.kotlin.tile.VectorTileData
-import org.maplibre.kotlin.util.LatLng
+import org.maplibre.android.MapLibre
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.Style
 
 class MapActivity : Activity() {
 
+    private lateinit var mapView: MapView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        MapLibre.getInstance(this)
 
-        val mapView = MapView(this)
+        mapView = MapView(this)
         setContentView(
             FrameLayout(this).apply {
-                addView(mapView, FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                ))
+                addView(
+                    mapView,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                    ),
+                )
             },
         )
+        mapView.onCreate(savedInstanceState)
 
-        val engine = mapView.mapEngine
-        engine.setStyle(
-            StyleSpec(
-                version = 8,
-                name = "demo",
-                sources = mapOf(
-                    "demo" to SourceSpec.Vector(id = "demo", tiles = emptyList()),
-                ),
-                layers = listOf(
-                    LayerSpec(
-                        id = "background",
-                        type = LayerType.Background,
-                        paint = mapOf(
-                            "background-color" to PropertyValue.Constant(Color(0.93f, 0.93f, 0.93f, 1.0f)),
-                            "background-opacity" to PropertyValue.Constant(1.0),
-                        ),
-                    ),
-                    LayerSpec(
-                        id = "water",
-                        type = LayerType.Fill,
-                        source = "demo",
-                        sourceLayer = "water",
-                        paint = mapOf(
-                            "fill-color" to PropertyValue.Constant(Color(0.4f, 0.65f, 0.85f, 1.0f)),
-                            "fill-opacity" to PropertyValue.Constant(1.0),
-                        ),
-                    ),
-                ),
-            ),
-        )
+        val apiKey = BuildConfig.MAPTILER_API_KEY
+        require(apiKey.isNotBlank()) { "Build with MAPTILER_API_KEY to run the OpenMapTiles sample." }
+        val styleJson = assets.open("basic.json").bufferedReader().use { it.readText() }
+            .replace("get_your_own_OpIi9ZULNHzrESv6T2vL", apiKey)
+        mapView.getMapAsync { map ->
+            map.setStyle(Style.Builder().fromJson(styleJson))
+        }
+    }
 
-        // Demo tile: a polygon in tile coordinates [0..EXTENT].
-        val extent = 8192
-        val tile = VectorTileData(
-            layers = mapOf(
-                "water" to TileLayer(
-                    name = "water",
-                    version = 2,
-                    extent = extent,
-                    features = listOf(
-                        TileFeature(
-                            id = 1,
-                            type = FeatureType.POLYGON,
-                            properties = emptyMap(),
-                            geometry = listOf(
-                                listOf(
-                                    TilePoint(1024.0, 1024.0),
-                                    TilePoint(7168.0, 1024.0),
-                                    TilePoint(7168.0, 7168.0),
-                                    TilePoint(1024.0, 7168.0),
-                                ),
-                            ),
-                        ),
-                    ),
-                ),
-            ),
-        )
-        engine.putTile(CanonicalTileID(2u, 1u, 1u), tile)
-        engine.setCamera(LatLng(0.0, 0.0), 2.0)
+    override fun onStart() {
+        super.onStart()
+        mapView.onStart()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mapView.onResume()
+    }
+
+    override fun onPause() {
+        mapView.onPause()
+        super.onPause()
+    }
+
+    override fun onStop() {
+        mapView.onStop()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        mapView.onDestroy()
+        super.onDestroy()
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        mapView.onLowMemory()
     }
 }

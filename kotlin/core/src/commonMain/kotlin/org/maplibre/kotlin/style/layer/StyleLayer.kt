@@ -83,6 +83,7 @@ abstract class StyleLayer(val spec: LayerSpec) {
         is Long -> Value.Number(v.toDouble())
         is Double -> Value.Number(v)
         is Float -> Value.Number(v.toDouble())
+        is Color -> Value.Color(v.r.toDouble(), v.g.toDouble(), v.b.toDouble(), v.a.toDouble())
         is String -> Value.String(v)
         else -> Value.String(v.toString())
     }

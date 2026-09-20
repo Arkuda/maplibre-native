@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.maplibre.kotlin.gfx.Color
 import org.maplibre.kotlin.map.MapEngineImpl
 import org.maplibre.kotlin.style.LayerSpec
 import org.maplibre.kotlin.style.LayerType
@@ -77,6 +78,30 @@ class MapEngineImplTest {
         assertEquals(0x66, frame[center + 1].toInt() and 0xFF)
         assertEquals(0xFF, frame[center + 2].toInt() and 0xFF)
         assertEquals(0xFF, frame[center + 3].toInt() and 0xFF)
+    }
+
+    @Test
+    fun rendersBackgroundWithoutTileData() {
+        val engine = MapEngineImpl()
+        engine.setStyle(
+            StyleSpec(
+                layers = listOf(
+                    LayerSpec(
+                        id = "background",
+                        type = LayerType.Background,
+                        paint = mapOf(
+                            "background-color" to PropertyValue.Constant(Color(0.2f, 0.4f, 1.0f, 1.0f)),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val frame = engine.renderFrame(4, 4)
+        assertEquals(0x33, frame[0].toInt() and 0xFF)
+        assertEquals(0x66, frame[1].toInt() and 0xFF)
+        assertEquals(0xFF, frame[2].toInt() and 0xFF)
+        assertEquals(0xFF, frame[3].toInt() and 0xFF)
     }
 
     @Test

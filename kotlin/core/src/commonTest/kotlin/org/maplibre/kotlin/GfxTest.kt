@@ -43,6 +43,14 @@ class GfxTest {
     }
 
     @Test
+    fun colorParseHsl() {
+        assertEquals(Color.red(), Color.parse("hsl(0, 100%, 50%)"))
+        val blue = Color.parse("hsla(240, 100%, 50%, 0.5)")!!
+        assertEquals(1.0f, blue.b)
+        assertEquals(0.5f, blue.a)
+    }
+
+    @Test
     fun colorChannelsValidated() {
         // channels must be in [0,1]
         try {
